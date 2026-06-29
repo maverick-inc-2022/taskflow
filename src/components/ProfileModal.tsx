@@ -53,7 +53,9 @@ export default function ProfileModal({ profile, isLoggedIn, needsPasswordChange,
   const [confirmPw, setConfirmPw] = useState("");
   const [changeError, setChangeError] = useState("");
 
-  const handleEmailSubmit = () => {
+  const [sending, setSending] = useState(false);
+
+  const handleEmailSubmit = async () => {
     if (!email.trim()) { setError("メールアドレスを入力してください"); return; }
     setError("");
     const account = loadAccount();
@@ -63,6 +65,15 @@ export default function ProfileModal({ profile, isLoggedIn, needsPasswordChange,
       const pw = genInitialPassword();
       saveAccount({ email: email.trim(), password: pw, isInitial: true });
       setInitialPw(pw);
+      setSending(true);
+      try {
+        await fetch("/api/send-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), password: pw }),
+        });
+      } catch { /* email sending failed silently */ }
+      setSending(false);
       setStep("initial-sent");
     }
   };
@@ -164,9 +175,10 @@ export default function ProfileModal({ profile, isLoggedIn, needsPasswordChange,
           {error && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
           <button
             onClick={handleEmailSubmit}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            disabled={sending}
+            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
-            次へ
+            {sending ? "送信中..." : "次へ"}
           </button>
         </Modal>
       );
@@ -219,12 +231,6 @@ export default function ProfileModal({ profile, isLoggedIn, needsPasswordChange,
           <p className="font-medium">初期パスワードをメールに送信しました</p>
           <p className="mt-1 text-xs text-blue-500">{email}</p>
         </div>
-        {initialPw && (
-          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs text-amber-600 font-medium">デモ用：初期パスワード</p>
-            <p className="mt-1 text-lg font-mono font-bold tracking-widest text-amber-800">{initialPw}</p>
-          </div>
-        )}
         <label className="mb-5 block">
           <span className="mb-1 block text-sm font-medium text-slate-600">初期パスワード</span>
           <div className="relative">

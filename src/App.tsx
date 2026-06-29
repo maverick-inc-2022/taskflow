@@ -281,6 +281,41 @@ export default function App() {
   useEffect(() => { localStorage.setItem('taskflow_memos',    JSON.stringify(memos));    }, [memos]);
   useEffect(() => { localStorage.setItem('taskflow_trash',    JSON.stringify(trash));    }, [trash]);
 
+  // ── Supabase cloud sync ──
+  const [syncedEmail, setSyncedEmail] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  const loadFromCloud = async (email: string) => {
+    try {
+      const res = await fetch(`/api/user-data?email=${encodeURIComponent(email)}`);
+      if (!res.ok) return;
+      const data = await res.json() as { tasks: Task[]; memos: StickyMemo[]; settings: Settings } | null;
+      if (!data) return;
+      if (data.tasks) { setTasks(data.tasks); localStorage.setItem('taskflow_tasks', JSON.stringify(data.tasks)); }
+      if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
+      if (data.settings) { setSettings(s => ({ ...s, ...data.settings })); }
+    } catch { /* network error, use local data */ }
+  };
+
+  const saveToCloud = async (email: string) => {
+    setSyncStatus("saving");
+    try {
+      const res = await fetch("/api/user-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, tasks, memos, settings }),
+      });
+      setSyncStatus(res.ok ? "saved" : "error");
+      setTimeout(() => setSyncStatus("idle"), 2000);
+    } catch { setSyncStatus("error"); setTimeout(() => setSyncStatus("idle"), 2000); }
+  };
+
+  useEffect(() => {
+    if (!syncedEmail) return;
+    const t = setTimeout(() => saveToCloud(syncedEmail), 2000);
+    return () => clearTimeout(t);
+  }, [tasks, memos, settings, syncedEmail]);
+
   useEffect(() => {
     if (needsPasswordChange) setActiveModal("profile");
   }, [needsPasswordChange]);
@@ -289,10 +324,13 @@ export default function App() {
     const account = (() => { try { const s = localStorage.getItem('taskflow_account'); return s ? JSON.parse(s) : null; } catch { return null; } })();
     setIsLoggedIn(true);
     setNeedsPasswordChange(account?.isInitial ?? false);
+    setSyncedEmail(email);
+    loadFromCloud(email);
   };
   const handleLogout = () => {
     setIsLoggedIn(false);
     setNeedsPasswordChange(false);
+    setSyncedEmail(null);
   };
   const handleChangePassword = (current: string, next: string): string | null => {
     const account = (() => { try { const s = localStorage.getItem('taskflow_account'); return s ? JSON.parse(s) : null; } catch { return null; } })();
