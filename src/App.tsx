@@ -1066,11 +1066,11 @@ export default function App() {
                   <div className="mb-1 flex items-center gap-3 border-b border-slate-100 px-3 pb-1.5 text-sm font-medium text-slate-400">
                     <span className="h-4 w-4 shrink-0" />
                     <span className="h-5 w-5 shrink-0" />
-                    <span className="w-28 shrink-0">プロジェクト名</span>
+                    <span className="shrink-0 text-xs sm:text-sm sm:w-28">プロジェクト名</span>
                     <span className="flex-1">タスク名</span>
-                    <span className="w-20 shrink-0 text-center">担当者</span>
-                    <span className="w-52 shrink-0 text-right">期日</span>
-                    <span className="w-20 shrink-0 text-center">優先度</span>
+                    <span className="hidden sm:block w-20 shrink-0 text-center">担当者</span>
+                    <span className="hidden sm:block w-52 shrink-0 text-right">期日</span>
+                    <span className="w-16 sm:w-20 shrink-0 text-center">優先度</span>
                   </div>
                   <div className="space-y-0.5">{renderList(todayActive)}</div>
                   {inlineAddButton("today")}
