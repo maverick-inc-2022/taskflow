@@ -236,13 +236,14 @@ export default function TaskItem({
           selectAndEdit();
           if (onChangeProject) setShowProjectPicker((v) => !v);
         }}
-        className={`w-28 shrink-0 rounded-md px-2 py-0.5 text-sm font-semibold transition ${
+        className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs sm:text-sm sm:px-2 font-semibold transition max-w-[5rem] sm:max-w-none sm:w-28 truncate ${
           task.done || !project
             ? "bg-slate-100 text-slate-400"
             : `${project.color} text-white`
         } ${onChangeProject ? "hover:opacity-80" : "cursor-default"}`}
       >
-        {project?.label ?? "未割当"}
+        <span className="hidden sm:inline">{project?.label ?? "未割当"}</span>
+        <span className="sm:hidden">{(project?.label ?? "未割当").slice(0, 4)}</span>
       </button>
       {showProjectPicker && (
         <InlineDropdown
@@ -358,7 +359,7 @@ export default function TaskItem({
         )}
       </span>
 
-      {/* owner — clickable */}
+      {/* owner — clickable, hidden on mobile */}
       <button
         ref={ownerBtnRef}
         onClick={(e) => {
@@ -367,7 +368,7 @@ export default function TaskItem({
           if (onChangeOwner) setShowOwnerPicker((v) => !v);
         }}
         title={owner?.name ?? "担当者を設定"}
-        className={`flex w-36 shrink-0 items-center gap-1.5 transition ${onChangeOwner ? "hover:bg-slate-100 rounded-lg px-1" : "cursor-default"}`}
+        className={`hidden sm:flex w-36 shrink-0 items-center gap-1.5 transition ${onChangeOwner ? "hover:bg-slate-100 rounded-lg px-1" : "cursor-default"}`}
       >
         {owner ? (
           <>
@@ -459,8 +460,8 @@ export default function TaskItem({
         </InlineDropdown>
       )}
 
-      {/* due date + repeat */}
-      <span className="relative flex w-52 shrink-0 items-center justify-end gap-1.5">
+      {/* due date + repeat — hidden on mobile */}
+      <span className="relative hidden sm:flex w-52 shrink-0 items-center justify-end gap-1.5">
         <span
           ref={dueBtnRef}
           onClick={(e) => { e.stopPropagation(); selectAndEdit(); if (!task.done && onChangeDue) { setDueEdit({ due: task.due, dueTime: task.dueTime ?? "", repeat: (task.repeat ?? "none") as RepeatMode, repeatConfig: task.repeatConfig ?? { interval: 1, unit: "week" as const, daysOfWeek: [new Date(task.due + "T00:00:00").getDay()], endType: "none" as const } }); setShowDuePicker((v) => !v); } }}

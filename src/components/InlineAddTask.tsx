@@ -178,8 +178,8 @@ export default function InlineAddTask({
           className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-300"
         />
 
-        {/* Owner — w-36 to match task row */}
-        <div ref={ownerRef} className="relative w-36 shrink-0">
+        {/* Owner — w-36 to match task row, hidden on mobile */}
+        <div ref={ownerRef} className="relative hidden sm:block w-36 shrink-0">
           <button type="button" onClick={() => { setShowOwner((v) => !v); setAddingPerson(false); }}
             className="flex w-full items-center gap-1.5 rounded-lg py-1 px-1 text-sm text-slate-600 hover:bg-white/60 transition">
             {ownerPerson
@@ -236,8 +236,8 @@ export default function InlineAddTask({
           )}
         </div>
 
-        {/* Due date + time — w-52 to match task row */}
-        <div className="flex w-52 shrink-0 items-center gap-1">
+        {/* Due date + time — w-52 to match task row, hidden on mobile */}
+        <div className="hidden sm:flex w-52 shrink-0 items-center gap-1">
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)}
             className="flex-1 rounded-md border border-slate-200 px-1 py-0.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white" />
           <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)}
@@ -254,6 +254,15 @@ export default function InlineAddTask({
             <option key={p} value={p}>{priorityMeta[p].label}</option>
           ))}
         </select>
+      </div>
+
+      {/* Mobile-only: due date row */}
+      <div className="sm:hidden flex items-center gap-2 border-t border-blue-100 px-4 py-2">
+        <span className="text-xs text-slate-400">期限</span>
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)}
+          className="flex-1 rounded-md border border-slate-200 px-2 py-0.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white" />
+        <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)}
+          className="w-20 rounded-md border border-slate-200 px-1 py-0.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white" />
       </div>
 
       {/* Action row with repeat */}

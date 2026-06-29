@@ -133,6 +133,8 @@ export default function App() {
     return "today";
   });
   const [showModal, setShowModal] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("date");
   const [sortOpen, setSortOpen] = useState(false);
@@ -795,42 +797,50 @@ export default function App() {
       </>
     );
 
+  const sidebarProps = {
+    view, onChangeView: setView, projects, selectedProject,
+    counts: counts.view, projectCounts: counts.projectCounts,
+    collapsed: sidebarCollapsed,
+    onToggleCollapse: () => setSidebarCollapsed((v) => !v),
+    onSelectProject: (id: ProjectId) => { setSelectedProject(id); setView("project"); },
+    onOpenSettings: () => setActiveModal("settings"),
+    onOpenHelp: () => setActiveModal("help"),
+    onAddTask: () => setShowModal(true),
+    onAddProject: addProject,
+    onUpdateProject: updateProject,
+    mainMode, onChangeMainMode: setMainMode,
+    memoCategories, memoCounts, memoFilter,
+    onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
+    onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory,
+    profile, onOpenProfile: () => setActiveModal("profile"),
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
-      <Sidebar
-        view={view}
-        onChangeView={setView}
-        projects={projects}
-        selectedProject={selectedProject}
-        counts={counts.view}
-        projectCounts={counts.projectCounts}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-        onSelectProject={(id) => {
-          setSelectedProject(id);
-          setView("project");
-        }}
-        onOpenSettings={() => setActiveModal("settings")}
-        onOpenHelp={() => setActiveModal("help")}
-        onAddTask={() => setShowModal(true)}
-        onAddProject={addProject}
-        onUpdateProject={updateProject}
-        mainMode={mainMode}
-        onChangeMainMode={setMainMode}
-        memoCategories={memoCategories}
-        memoCounts={memoCounts}
-        memoFilter={memoFilter}
-        onAddMemo={addMemo}
-        onChangeMemoFilter={setMemoFilter}
-        onAddMemoCategory={addMemoCategory}
-        onDeleteMemoCategory={deleteMemoCategory}
-        profile={profile}
-        onOpenProfile={() => setActiveModal("profile")}
-      />
+      {/* Mobile sidebar overlay */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-72 bg-slate-100 shadow-xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <Sidebar {...sidebarProps} collapsed={false} onToggleCollapse={() => setMobileSidebarOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <div className="hidden md:block">
+        <Sidebar {...sidebarProps} />
+      </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* ── Top bar ── */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 md:px-4">
+          {/* Mobile hamburger */}
+          <button onClick={() => setMobileSidebarOpen(true)} className="md:hidden rounded-md p-2 text-slate-500 hover:bg-slate-100">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
           {/* View tabs: 今日/今週/今月/すべて — タスクモード・リスト/テーブルのみ表示 */}
           {mainMode === "tasks" && (["today","week","month","all"] as View[]).includes(view) && (layout === "list" || layout === "table") ? (
             <div className="flex items-center gap-0.5 rounded-full border border-slate-200 p-0.5">
@@ -841,7 +851,7 @@ export default function App() {
                 { id: "all"   as View, label: "すべて" },
               ]).map((tab) => (
                 <button key={tab.id} onClick={() => setView(tab.id)}
-                  className={`whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition ${
+                  className={`whitespace-nowrap rounded-full px-2 py-1 text-xs sm:text-sm sm:px-3 font-medium transition ${
                     view === tab.id
                       ? "bg-blue-600 text-white shadow-sm"
                       : "text-slate-500 hover:bg-slate-100"
@@ -904,10 +914,10 @@ export default function App() {
             </button>
           </div>
 
-          {mainMode === "tasks" && <div className="h-5 w-px bg-slate-200" />}
+          {mainMode === "tasks" && <div className="hidden sm:block h-5 w-px bg-slate-200" />}
 
-          {/* Layout switcher — tasks mode only */}
-          {mainMode === "tasks" && <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+          {/* Layout switcher — tasks mode only, hidden on mobile */}
+          {mainMode === "tasks" && <div className="hidden sm:flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
             {layoutOptions.map((o) => {
               const Icon = o.icon;
               const active = layout === o.id;
@@ -922,7 +932,7 @@ export default function App() {
             })}
           </div>}
 
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="hidden sm:block h-5 w-px bg-slate-200" />
 
           {/* Bell notification */}
           <div className="relative">
@@ -943,11 +953,11 @@ export default function App() {
             )}
           </div>
 
-          {/* Right panel toggle */}
+          {/* Right panel toggle — hidden on mobile */}
           <button
             onClick={() => setRightOpen((v) => !v)}
             title={rightOpen ? "右パネルを隠す" : "右パネルを表示"}
-            className={`rounded-md p-2 transition hover:bg-slate-100 ${rightOpen ? "text-blue-600" : "text-slate-400"}`}
+            className={`hidden md:flex rounded-md p-2 transition hover:bg-slate-100 ${rightOpen ? "text-blue-600" : "text-slate-400"}`}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>
@@ -1000,8 +1010,8 @@ export default function App() {
               onReorderMemo={reorderMemo}
             />
           ) : (
-          <div className="px-8 py-6">
-          <div className="space-y-6">
+          <div className="px-3 py-4 md:px-8 md:py-6">
+          <div className="space-y-4 md:space-y-6">
             {layout === "kanban" ? (
               <KanbanView
                 tasks={flatVisible}
@@ -1176,7 +1186,7 @@ export default function App() {
 
           {/* Far-right collapsible sidebar — Calendar / Google Calendar / Gmail / Slack */}
           <div
-            className="shrink-0 overflow-hidden transition-all duration-300 ease-in-out"
+            className="hidden md:block shrink-0 overflow-hidden transition-all duration-300 ease-in-out"
             style={{ width: rightOpen ? 340 : 0 }}
           >
             <div className="h-full w-[340px] space-y-6 overflow-y-auto border-l border-slate-100 py-6 pr-5 pl-4">
