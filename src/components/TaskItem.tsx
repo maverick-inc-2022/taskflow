@@ -201,9 +201,9 @@ export default function TaskItem({
               : "hover:bg-slate-50"
       }`}
     >
-      {/* drag handle — always takes up space, only active in custom sort */}
+      {/* drag handle — hidden on mobile */}
       <span
-        className={`h-4 w-4 shrink-0 transition ${draggable ? "cursor-grab text-slate-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing" : "pointer-events-none opacity-0"}`}
+        className={`hidden sm:inline-block h-4 w-4 shrink-0 transition ${draggable ? "cursor-grab text-slate-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing" : "pointer-events-none opacity-0"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <GripIcon className="h-4 w-4" />
@@ -228,7 +228,7 @@ export default function TaskItem({
         </svg>
       </button>
 
-      {/* project badge */}
+      {/* project badge — full badge on desktop, color dot on mobile */}
       <button
         ref={projectBtnRef}
         onClick={(e) => {
@@ -236,15 +236,27 @@ export default function TaskItem({
           selectAndEdit();
           if (onChangeProject) setShowProjectPicker((v) => !v);
         }}
-        className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs sm:text-sm sm:px-2 font-semibold transition max-w-[5rem] sm:max-w-none sm:w-28 truncate ${
+        title={project?.label ?? "未割当"}
+        className={`hidden sm:block shrink-0 rounded-md px-2 py-0.5 text-sm font-semibold transition w-28 truncate ${
           task.done || !project
             ? "bg-slate-100 text-slate-400"
             : `${project.color} text-white`
         } ${onChangeProject ? "hover:opacity-80" : "cursor-default"}`}
       >
-        <span className="hidden sm:inline">{project?.label ?? "未割当"}</span>
-        <span className="sm:hidden">{(project?.label ?? "未割当").slice(0, 4)}</span>
+        {project?.label ?? "未割当"}
       </button>
+      {/* Mobile: color dot only */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          selectAndEdit();
+          if (onChangeProject) setShowProjectPicker((v) => !v);
+        }}
+        title={project?.label ?? "未割当"}
+        className={`sm:hidden shrink-0 h-2.5 w-2.5 rounded-full transition ${
+          task.done || !project ? "bg-slate-300" : project.color
+        } ${onChangeProject ? "hover:opacity-80" : "cursor-default"}`}
+      />
       {showProjectPicker && (
         <InlineDropdown
           anchorRef={projectBtnRef as React.RefObject<HTMLElement | null>}
@@ -328,7 +340,7 @@ export default function TaskItem({
         </InlineDropdown>
       )}
 
-      {/* title */}
+      {/* title + mobile due date */}
       <span className="relative min-w-0 flex-1">
         {editing ? (
           <input
@@ -341,16 +353,23 @@ export default function TaskItem({
               if (e.key === "Escape") { setEditValue(task.title); setEditing(false); }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full rounded bg-white px-1 text-[17px] text-slate-700 outline-none ring-2 ring-blue-400"
+            className="w-full rounded bg-white px-1 text-sm sm:text-[17px] text-slate-700 outline-none ring-2 ring-blue-400"
           />
         ) : (
           <>
             <span
-              className={`block truncate text-[17px] transition-colors duration-300 ${task.done ? "text-slate-400" : "text-slate-700"}`}
+              className={`block truncate text-sm sm:text-[17px] transition-colors duration-300 ${task.done ? "text-slate-400" : "text-slate-700"}`}
               onClick={(e) => { e.stopPropagation(); selectAndEdit(); }}
             >
               {task.title}
             </span>
+            {/* Mobile-only: due date shown below title */}
+            {!editing && (
+              <span className="sm:hidden block text-[10px] text-slate-400 truncate leading-tight mt-0.5">
+                {task.done && task.completedDate ? task.completedDate : due}
+                {task.repeat && task.repeat !== "none" ? " ↻" : ""}
+              </span>
+            )}
             <span
               className={`pointer-events-none absolute left-0 top-1/2 h-px origin-left bg-slate-400 transition-transform duration-300 ease-out ${task.done ? "scale-x-100" : "scale-x-0"}`}
               style={{ width: "100%" }}
@@ -634,7 +653,7 @@ export default function TaskItem({
 
       {/* priority badge — clickable */}
       {task.done ? (
-        <span className="flex h-6 w-20 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-400">
+        <span className="flex h-6 w-12 sm:w-20 shrink-0 items-center justify-center rounded-md bg-slate-200 text-xs sm:text-sm font-semibold text-slate-400">
           完了
         </span>
       ) : (
@@ -642,7 +661,7 @@ export default function TaskItem({
           <span
             ref={priorityBtnRef}
             onClick={(e) => { e.stopPropagation(); selectAndEdit(); if (onChangePriority) setShowPriorityPicker((v) => !v); }}
-            className={`flex h-6 w-20 items-center justify-center rounded-md text-sm font-semibold ${pr.className} ${onChangePriority ? "cursor-pointer hover:opacity-80" : ""}`}
+            className={`flex h-6 w-12 sm:w-20 items-center justify-center rounded-md text-xs sm:text-sm font-semibold ${pr.className} ${onChangePriority ? "cursor-pointer hover:opacity-80" : ""}`}
           >
             {pr.label}
           </span>
