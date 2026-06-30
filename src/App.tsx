@@ -5,7 +5,7 @@ import TaskItem from "./components/TaskItem";
 import GmailPanel from "./components/GmailPanel";
 import SlackPanel from "./components/SlackPanel";
 import GoogleCalendarPanel from "./components/GoogleCalendarPanel";
-import TaskNotesPanel from "./components/TaskNotesPanel";
+import TaskDetailPanel from "./components/TaskDetailPanel";
 import MobileTaskDetail from "./components/MobileTaskDetail";
 import AddTaskModal from "./components/AddTaskModal";
 import InlineAddTask from "./components/InlineAddTask";
@@ -1242,16 +1242,16 @@ export default function App() {
           {mainMode === "tasks" && (selectedId !== null || inlineAfter !== null) && (() => {
             const selectedTask = selectedId ? tasks.find((t) => t.id === selectedId) : null;
             const desktopPanel = selectedTask ? (
-              <TaskNotesPanel
+              <TaskDetailPanel
+                key={selectedTask.id}
                 task={selectedTask}
-                onChangeMemos={(memos) => updateTask(selectedId!, { memos })}
+                today={TODAY}
+                projects={projects}
+                onUpdate={(patch) => updateTask(selectedId!, patch)}
                 onClose={() => setSelectedId(null)}
-              />
-            ) : inlineAfter !== null ? (
-              <TaskNotesPanel
-                task={{ id: "draft", title: "新しいタスク", project: "work", due: TODAY, priority: "mid", done: false, starred: false, memos: draftMemos }}
-                onChangeMemos={setDraftMemos}
-                onClose={() => { setInlineAfter(null); setDraftMemos([]); }}
+                onDelete={(id) => { deleteTask(id); setSelectedId(null); }}
+                onStar={star}
+                onToggle={toggle}
               />
             ) : null;
             return (

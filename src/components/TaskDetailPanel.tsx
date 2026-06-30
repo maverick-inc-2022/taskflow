@@ -1,86 +1,79 @@
 import { useEffect, useRef, useState } from "react";
-import { AvatarDisplay } from "../avatarIcons";
-import { people, projects, repeatLabels, taskColors } from "../data";
-import type { Attachment, Priority, RepeatMode, TaskColor, Task } from "../types";
+import { repeatLabels, defaultProjects } from "../data";
+import { memosToPlainText, applyPlainTextToMemos } from "../memoText";
+import type { NoteMemo, Project, RepeatMode, Task } from "../types";
 import { dueLabel } from "../ui";
-import MemoEditor from "./MemoEditor";
-import {
-  CalendarIcon,
-  CheckCircleIcon,
-  CopyIcon,
-  FileIcon,
-  ListIcon,
-  PaletteIcon,
-  PaperclipIcon,
-  RepeatIcon,
-  StarIcon,
-  TrashIcon,
-  XIcon,
-} from "../icons";
+import { StarIcon, XIcon, TrashIcon } from "../icons";
 
 interface Props {
   task: Task;
   today: string;
+  projects?: Project[];
+  onUpdate: (patch: Partial<Task>) => void;
   onClose: () => void;
-  onChangeNotes: (id: string, notes: string) => void;
-  onChangeTitle: (id: string, title: string) => void;
-  onStar: (id: string) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  onChangeOwner: (id: string, owner: string) => void;
-  onChangeRepeat: (id: string, repeat: RepeatMode) => void;
-  onChangePriority: (id: string, priority: Priority) => void;
-  onChangeColor: (id: string, color: TaskColor) => void;
-  onAddAttachments: (id: string, files: Attachment[]) => void;
-  onDeleteAttachment: (id: string, attId: string) => void;
-  onAddSubtask: (id: string, title: string) => void;
-  onToggleSubtask: (id: string, subId: string) => void;
-  onDeleteSubtask: (id: string, subId: string) => void;
+  onStar: (id: string) => void;
+  onToggle: (id: string) => void;
 }
 
-function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+function CalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+    </svg>
+  );
+}
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+    </svg>
+  );
+}
+function RepIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </svg>
+  );
+}
+function FolderIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>
+  );
+}
+function MemoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  );
 }
 
-let attId = 1;
-
-const priorityOptions: { id: Priority; label: string; color: string }[] = [
-  { id: "high", label: "高", color: "bg-red-100 text-red-600 hover:bg-red-200" },
-  { id: "mid", label: "中", color: "bg-amber-100 text-amber-600 hover:bg-amber-200" },
-  { id: "low", label: "低", color: "bg-slate-100 text-slate-500 hover:bg-slate-200" },
-];
 
 export default function TaskDetailPanel({
   task,
   today,
+  projects: propProjects,
+  onUpdate,
   onClose,
-  onChangeNotes,
-  onChangeTitle,
-  onStar,
   onDelete,
-  onDuplicate,
-  onChangeOwner,
-  onChangeRepeat,
-  onChangePriority,
-  onChangeColor,
-  onAddAttachments,
-  onDeleteAttachment,
-  onAddSubtask,
-  onToggleSubtask,
-  onDeleteSubtask,
+  onStar,
+  onToggle,
 }: Props) {
+  const projects = propProjects ?? defaultProjects;
   const project = projects.find((p) => p.id === task.project);
-  const [newSub, setNewSub] = useState("");
-  const [titleDraft, setTitleDraft] = useState(task.title);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const subtasks = task.subtasks ?? [];
-  const doneCount = subtasks.filter((s) => s.done).length;
-  const attachments = task.attachments ?? [];
 
-  // Sync title when task changes
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  const [memoText, setMemoText] = useState(() => memosToPlainText(task.memos));
+  const [newSub, setNewSub] = useState("");
+  const [dateEdit, setDateEdit] = useState(false);
+  const subtasks = task.subtasks ?? [];
+
   useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
+  useEffect(() => { setMemoText(memosToPlainText(task.memos)); }, [task.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -90,25 +83,57 @@ export default function TaskDetailPanel({
 
   const commitTitle = () => {
     const t = titleDraft.trim();
-    if (t && t !== task.title) onChangeTitle(task.id, t);
+    if (t && t !== task.title) onUpdate({ title: t });
     else setTitleDraft(task.title);
   };
+
+  const commitMemo = () => {
+    const newMemos = applyPlainTextToMemos(task.memos, memoText);
+    onUpdate({ memos: newMemos });
+  };
+
+  const dueFmt = task.done && task.completedDate ? `完了 ${task.completedDate}` : dueLabel(task.due, today);
 
   return (
     <section
       key={task.id}
-      className="animate-slide-in-right flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+      className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      {/* ── Title bar ── */}
-      <div className="flex items-start gap-2 px-5 pt-5 pb-3">
+      {/* ── Close button ── */}
+      <div className="flex justify-end px-3 pt-3 pb-0">
+        <button onClick={onClose} aria-label="閉じる"
+          className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <XIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* ── Title row ── */}
+      <div className="flex items-start gap-2 px-4 pb-4">
+        {/* circle checkbox */}
+        <button
+          onClick={() => onToggle(task.id)}
+          aria-label="完了"
+          className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90 ${
+            task.done ? "border-slate-400 bg-slate-400 text-white" : "border-slate-400 hover:border-blue-500"
+          }`}
+        >
+          {task.done && (
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m20 6-11 11-5-5" />
+            </svg>
+          )}
+        </button>
+
         <textarea
           value={titleDraft}
           onChange={(e) => setTitleDraft(e.target.value)}
           onBlur={commitTitle}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitTitle(); (e.target as HTMLTextAreaElement).blur(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); commitTitle(); (e.target as HTMLTextAreaElement).blur(); }
+          }}
           rows={1}
-          className="min-h-0 flex-1 resize-none overflow-hidden border-0 border-b-2 border-transparent bg-transparent text-lg font-bold leading-snug text-slate-800 outline-none transition focus:border-blue-500 placeholder:text-slate-300"
-          style={{ height: "auto" }}
+          className="min-h-0 flex-1 resize-none border-0 bg-transparent text-base font-semibold leading-snug text-slate-800 outline-none placeholder:text-slate-300"
+          style={{ fontSize: "16px" }}
           onInput={(e) => {
             const el = e.target as HTMLTextAreaElement;
             el.style.height = "auto";
@@ -116,195 +141,169 @@ export default function TaskDetailPanel({
           }}
           placeholder="タイトルを追加"
         />
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button onClick={() => onStar(task.id)} aria-label="スター"
-            className={`rounded-full p-1.5 transition ${task.starred ? "text-amber-400" : "text-slate-300 hover:text-amber-400"}`}>
-            <StarIcon filled={task.starred} className="h-4 w-4" />
-          </button>
-          <button onClick={() => onDuplicate(task.id)} aria-label="複製"
-            className="rounded-full p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600">
-            <CopyIcon className="h-4 w-4" />
-          </button>
-          <button onClick={() => onDelete(task.id)} aria-label="削除"
-            className="rounded-full p-1.5 text-slate-300 transition hover:bg-red-50 hover:text-red-500">
-            <TrashIcon className="h-4 w-4" />
-          </button>
-          <button onClick={onClose} aria-label="閉じる"
-            className="rounded-full p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-500">
-            <XIcon className="h-4 w-4" />
-          </button>
-        </div>
+
+        <button onClick={() => onStar(task.id)} aria-label="スター"
+          className={`mt-0.5 shrink-0 p-1 transition ${task.starred ? "text-amber-400" : "text-slate-300 hover:text-amber-400"}`}>
+          <StarIcon filled={task.starred} className="h-4 w-4" />
+        </button>
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto border-t border-slate-100">
 
-        {/* Date / project / priority row */}
-        <div className="flex items-start gap-3 border-t border-slate-100 px-5 py-3">
-          <CalendarIcon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-          <div className="flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center rounded-md border border-slate-200 px-2.5 py-1 text-sm text-slate-600">
-              {task.dueTime ? `${dueLabel(task.due, today)} ${task.dueTime}` : dueLabel(task.due, today)}
-            </span>
-            {project && (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-sm text-slate-600">
-                <span className={`h-2 w-2 rounded-full ${project.color}`} />
-                {project.label}
-              </span>
-            )}
-            {task.done && task.completedDate && (
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-700">
-                <CheckCircleIcon className="h-3.5 w-3.5" />
-                完了 {task.completedDate}
-              </span>
-            )}
+        {/* 日付 */}
+        <div
+          className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3.5 hover:bg-slate-50"
+          onClick={() => setDateEdit((v) => !v)}
+        >
+          <CalIcon />
+          <span className={`flex-1 text-sm ${task.due ? "text-slate-700" : "text-slate-400"}`}>
+            {task.due ? dueFmt : "日付を追加"}
+          </span>
+          {task.due && !task.done && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUpdate({ due: "" }); }}
+              className="shrink-0 text-slate-300 hover:text-slate-500"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {dateEdit && (
+          <div className="border-b border-slate-100 px-4 py-3 bg-slate-50">
+            <input
+              type="date"
+              value={task.due}
+              onChange={(e) => { onUpdate({ due: e.target.value }); setDateEdit(false); }}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+              autoFocus
+            />
           </div>
+        )}
+
+        {/* 時間 */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+          <ClockIcon />
+          <input
+            type="time"
+            value={task.dueTime ?? ""}
+            onChange={(e) => onUpdate({ dueTime: e.target.value || undefined })}
+            className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            placeholder="時間を追加"
+            style={{ colorScheme: "light" }}
+          />
         </div>
 
-        {/* Color row */}
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-3">
-          <PaletteIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          <div className="flex gap-2">
-            {(Object.keys(taskColors) as TaskColor[]).map((c) => {
-              const selected = (task.color ?? "none") === c;
-              return (
-                <button key={c} onClick={() => onChangeColor(task.id, c)} title={taskColors[c].label}
-                  className={`h-5 w-5 rounded-full ${taskColors[c].dot} transition ${
-                    selected ? "ring-2 ring-blue-400 ring-offset-1" : "hover:scale-110"
-                  } ${c === "none" ? "border border-slate-300" : ""}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Owner row */}
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5">
-          <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
-          <select value={task.owner ?? ""} onChange={(e) => onChangeOwner(task.id, e.target.value)}
-            className="flex-1 rounded-lg border-0 bg-transparent py-1 text-sm text-slate-700 outline-none hover:bg-slate-50 focus:bg-slate-50 cursor-pointer">
-            <option value="">担当者を追加</option>
-            {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          {task.owner && (() => {
-            const owner = people.find((p) => p.id === task.owner);
-            return owner ? (
-              <AvatarDisplay avatar={owner.avatar} name={owner.name} size={24} />
-            ) : null;
-          })()}
-        </div>
-
-        {/* Repeat row */}
-        <div className="flex items-center gap-3 border-t border-slate-100 px-5 py-2.5">
-          <RepeatIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          <select value={task.repeat ?? "none"} onChange={(e) => onChangeRepeat(task.id, e.target.value as RepeatMode)}
-            className="flex-1 rounded-lg border-0 bg-transparent py-1 text-sm text-slate-700 outline-none hover:bg-slate-50 focus:bg-slate-50 cursor-pointer">
+        {/* 繰り返し */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+          <RepIcon />
+          <select
+            value={task.repeat ?? "none"}
+            onChange={(e) => onUpdate({ repeat: e.target.value as RepeatMode })}
+            className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
+          >
             {(Object.keys(repeatLabels) as RepeatMode[]).map((r) => (
               <option key={r} value={r}>{repeatLabels[r]}</option>
             ))}
           </select>
         </div>
 
-        {/* Memo row */}
-        <div className="border-t border-slate-100 px-5 py-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-500">
-            <ListIcon className="h-4 w-4" />
-            メインメモ
-          </div>
-          <MemoEditor value={task.notes ?? ""} onChange={(v) => onChangeNotes(task.id, v)} />
-        </div>
-
-        {/* Attachments row */}
-        <div className="border-t border-slate-100 px-5 py-3">
-          <div className="mb-2 flex items-center justify-between text-sm font-medium text-slate-500">
-            <span className="flex items-center gap-2">
-              <PaperclipIcon className="h-4 w-4" />
-              添付ファイル
-              {attachments.length > 0 && (
-                <span className="text-xs text-slate-400">({attachments.length})</span>
-              )}
-            </span>
-            <button onClick={() => fileRef.current?.click()}
-              className="rounded px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50">
-              ＋ 追加
-            </button>
-            <input ref={fileRef} type="file" multiple className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []).map((f) => ({
-                  id: `att${attId++}`, name: f.name, size: f.size,
-                }));
-                if (files.length) onAddAttachments(task.id, files);
-                e.target.value = "";
-              }} />
-          </div>
-          {attachments.length > 0 && (
-            <ul className="space-y-1">
-              {attachments.map((a) => (
-                <li key={a.id} className="group flex items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-1.5 hover:bg-slate-50">
-                  <FileIcon className="h-4 w-4 shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{a.name}</span>
-                  <span className="shrink-0 text-xs text-slate-400">{fmtSize(a.size)}</span>
-                  <button onClick={() => onDeleteAttachment(task.id, a.id)}
-                    className="shrink-0 text-slate-300 opacity-0 transition hover:text-red-500 group-hover:opacity-100">
-                    <XIcon className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+        {/* プロジェクト */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+          <FolderIcon />
+          <select
+            value={task.project ?? ""}
+            onChange={(e) => onUpdate({ project: e.target.value })}
+            className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
+          >
+            <option value="">プロジェクトなし</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+          {project && (
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${project.color}`} />
           )}
         </div>
 
-        {/* Subtasks row */}
-        <div className="border-t border-slate-100 px-5 py-3 pb-6">
-          <div className="mb-2 flex items-center justify-between text-sm font-medium text-slate-500">
-            <span className="flex items-center gap-2">
-              <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        {/* メモ */}
+        <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-3.5">
+          <MemoIcon />
+          <textarea
+            value={memoText}
+            onChange={(e) => setMemoText(e.target.value)}
+            onBlur={commitMemo}
+            placeholder="メモを追加"
+            rows={3}
+            className="min-h-[4rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            style={{ fontSize: "14px", lineHeight: "1.6" }}
+          />
+        </div>
+
+        {/* サブタスク */}
+        <div className="px-4 py-3">
+          <p className="mb-2 text-xs font-semibold text-slate-500">サブタスク</p>
+
+          {/* Add subtask row */}
+          <div className="flex items-center gap-2 py-1.5">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-400">
+              <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
               </svg>
-              サブタスク
             </span>
-            {subtasks.length > 0 && (
-              <span className="text-xs text-slate-400">{doneCount}/{subtasks.length}</span>
-            )}
+            <input
+              value={newSub}
+              onChange={(e) => setNewSub(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newSub.trim()) {
+                  const id = `sub${Date.now()}`;
+                  onUpdate({ subtasks: [...subtasks, { id, title: newSub.trim(), done: false }] });
+                  setNewSub("");
+                }
+              }}
+              placeholder="サブタスクを追加"
+              className="flex-1 border-0 bg-transparent text-sm text-slate-500 outline-none placeholder:text-slate-400"
+              style={{ fontSize: "14px" }}
+            />
           </div>
-          <div className="space-y-0.5">
+
+          {/* Subtask list */}
+          <div className="mt-1 space-y-0.5">
             {subtasks.map((s) => (
-              <div key={s.id} className="group flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-slate-50">
-                <button onClick={() => onToggleSubtask(task.id, s.id)}
-                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition ${
-                    s.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 hover:border-blue-500"
-                  }`}>
+              <div key={s.id} className="group flex items-center gap-2 rounded-lg py-1.5">
+                <button
+                  onClick={() => onUpdate({ subtasks: subtasks.map((x) => x.id === s.id ? { ...x, done: !x.done } : x) })}
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                    s.done ? "border-slate-400 bg-slate-400 text-white" : "border-slate-400 hover:border-blue-500"
+                  }`}
+                >
                   {s.done && (
-                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="m20 6-11 11-5-5" />
                     </svg>
                   )}
                 </button>
-                <span className={`min-w-0 flex-1 truncate text-sm ${s.done ? "text-slate-400 line-through" : "text-slate-700"}`}>
-                  {s.title}
-                </span>
-                <button onClick={() => onDeleteSubtask(task.id, s.id)}
-                  className="shrink-0 text-slate-300 opacity-0 transition hover:text-red-500 group-hover:opacity-100">
-                  <XIcon className="h-4 w-4" />
+                <span className={`flex-1 text-sm ${s.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{s.title}</span>
+                <button
+                  onClick={() => onUpdate({ subtasks: subtasks.filter((x) => x.id !== s.id) })}
+                  className="shrink-0 text-slate-300 opacity-0 transition hover:text-slate-500 group-hover:opacity-100"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
           </div>
-          <div className="mt-1 flex items-center gap-2 rounded-lg px-1 py-1.5">
-            <span className="h-4 w-4 shrink-0 rounded border-2 border-dashed border-slate-300" />
-            <input value={newSub} onChange={(e) => setNewSub(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newSub.trim()) {
-                  onAddSubtask(task.id, newSub.trim());
-                  setNewSub("");
-                }
-              }}
-              placeholder="サブタスクを追加（Enter）"
-              className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400" />
-          </div>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="border-t border-slate-100 px-4 py-4">
+          <button
+            onClick={() => onDelete(task.id)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
+          >
+            <TrashIcon className="h-4 w-4" />
+            タスクを削除
+          </button>
         </div>
       </div>
     </section>

@@ -358,6 +358,20 @@ export default function TaskItem({
         )}
       </span>
 
+      {/* due date badge — right side, always visible */}
+      {task.due && (
+        <span className={`flex shrink-0 items-center gap-1 text-xs ${
+          !task.done && task.due < today ? "text-red-400"
+          : !task.done && task.due === today ? "text-blue-500"
+          : "text-slate-400"
+        }`}>
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+          </svg>
+          <span className="whitespace-nowrap">{task.done && task.completedDate ? task.completedDate : due}</span>
+        </span>
+      )}
+
       {/* star button */}
       {onStar && (
         <button
@@ -368,7 +382,7 @@ export default function TaskItem({
         </button>
       )}
 
-      {/* owner — hidden, kept for dropdown logic */}
+      {/* owner — hidden */}
       <button
         ref={ownerBtnRef}
         onClick={(e) => {
