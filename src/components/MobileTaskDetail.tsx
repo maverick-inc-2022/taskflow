@@ -9,6 +9,7 @@ interface Props {
   task: Task;
   projects?: Project[];
   people?: Person[];
+  onAddPerson?: (name: string, avatar: string) => void;
   onUpdate: (patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
   onToggle: (id: string) => void;
@@ -19,6 +20,7 @@ export default function MobileTaskDetail({
   task,
   projects: propProjects,
   people: propPeople,
+  onAddPerson,
   onUpdate,
   onDelete,
   onToggle,
@@ -291,7 +293,7 @@ export default function MobileTaskDetail({
 
       {/* 繰り返しシート */}
       {showRepeat && (
-        <div className="fixed inset-0 z-60 flex items-end bg-black/40" onClick={() => setShowRepeat(false)}>
+        <div className="fixed inset-0 z-[60] flex items-end bg-black/40" onClick={() => setShowRepeat(false)}>
           <div className="w-full rounded-t-2xl bg-white pb-8" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto my-3 h-1 w-10 rounded-full bg-slate-300" />
             <p className="px-4 pb-2 text-sm font-semibold text-slate-500">繰り返し</p>
@@ -318,7 +320,7 @@ export default function MobileTaskDetail({
 
       {/* 担当者シート */}
       {showOwner && (
-        <div className="fixed inset-0 z-60 flex items-end bg-black/40" onClick={() => setShowOwner(false)}>
+        <div className="fixed inset-0 z-[60] flex items-end bg-black/40" onClick={() => setShowOwner(false)}>
           <div className="w-full rounded-t-2xl bg-white pb-8" onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto my-3 h-1 w-10 rounded-full bg-slate-300" />
             <p className="px-4 pb-2 text-sm font-semibold text-slate-500">所有者</p>
@@ -357,8 +359,8 @@ export default function MobileTaskDetail({
                 />
                 <button
                   onClick={() => {
-                    if (newPersonName.trim()) {
-                      // addPerson is not available here — handled via props if needed
+                    if (newPersonName.trim() && onAddPerson) {
+                      onAddPerson(newPersonName.trim(), "icon:male-adult:#64748b");
                       setNewPersonName("");
                     }
                   }}

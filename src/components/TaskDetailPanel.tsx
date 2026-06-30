@@ -89,6 +89,18 @@ export default function TaskDetailPanel({
   const subtasks = task.subtasks ?? [];
 
   useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
+
+  // ownerドロップダウンを外クリックで閉じる
+  useEffect(() => {
+    if (!ownerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ownerRef.current && !ownerRef.current.contains(e.target as Node)) {
+        setOwnerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ownerOpen]);
   useEffect(() => { setMemoText(memosToPlainText(task.memos)); }, [task.id]);
   useEffect(() => { setTimeDraft(task.dueTime ?? ""); }, [task.id, task.dueTime]);
   useEffect(() => {
@@ -97,7 +109,7 @@ export default function TaskDetailPanel({
       richEditorRef.current.innerHTML = html;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id]);
+  }, [task.id, richMemoOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
