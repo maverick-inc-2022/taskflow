@@ -926,12 +926,12 @@ export default function App() {
             </span>
           ) : (
             /* メモモード: タイトル + フィルタータブ */
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2">
               <span className="whitespace-nowrap text-base font-semibold text-slate-700">メモ</span>
-              <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 p-0.5">
+              <div className="flex min-w-0 overflow-x-auto items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 p-0.5 scrollbar-none">
                 <button
                   onClick={() => setMemoFilter(null)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${memoFilter === null ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/60"}`}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition ${memoFilter === null ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/60"}`}
                 >
                   すべて{memos.length > 0 && <span className="ml-0.5 opacity-60">({memos.length})</span>}
                 </button>
@@ -941,9 +941,9 @@ export default function App() {
                     <button
                       key={cat.id}
                       onClick={() => setMemoFilter(cat.id)}
-                      className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition ${memoFilter === cat.id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/60"}`}
+                      className={`whitespace-nowrap flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition ${memoFilter === cat.id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/60"}`}
                     >
-                      <span className={`h-2 w-2 rounded-full ${cat.color}`} />
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${cat.color}`} />
                       {cat.name}{count > 0 && <span className="opacity-60">({count})</span>}
                     </button>
                   );
@@ -1266,26 +1266,36 @@ export default function App() {
           )}
 
           {/* Notes panel — visible when a task or draft is selected (tasks mode only) */}
-          {mainMode === "tasks" && (selectedId !== null || inlineAfter !== null) && (
-            <div className="shrink-0 overflow-y-auto py-6 pr-4 pl-3" style={{ width: rightWidth }}>
-              {selectedId ? (() => {
-                const selectedTask = tasks.find((t) => t.id === selectedId);
-                return selectedTask ? (
-                  <TaskNotesPanel
-                    task={selectedTask}
-                    onChangeMemos={(memos) => updateTask(selectedId, { memos })}
-                    onClose={() => setSelectedId(null)}
-                  />
-                ) : null;
-              })() : (
+          {mainMode === "tasks" && (selectedId !== null || inlineAfter !== null) && (() => {
+            const panel = selectedId ? (() => {
+              const selectedTask = tasks.find((t) => t.id === selectedId);
+              return selectedTask ? (
                 <TaskNotesPanel
-                  task={{ id: "draft", title: "新しいタスク", project: "work", due: TODAY, priority: "mid", done: false, starred: false, memos: draftMemos }}
-                  onChangeMemos={setDraftMemos}
-                  onClose={() => { setInlineAfter(null); setDraftMemos([]); }}
+                  task={selectedTask}
+                  onChangeMemos={(memos) => updateTask(selectedId, { memos })}
+                  onClose={() => setSelectedId(null)}
                 />
-              )}
-            </div>
-          )}
+              ) : null;
+            })() : (
+              <TaskNotesPanel
+                task={{ id: "draft", title: "新しいタスク", project: "work", due: TODAY, priority: "mid", done: false, starred: false, memos: draftMemos }}
+                onChangeMemos={setDraftMemos}
+                onClose={() => { setInlineAfter(null); setDraftMemos([]); }}
+              />
+            );
+            return (
+              <>
+                {/* Mobile: full-screen overlay */}
+                <div className="md:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
+                  {panel}
+                </div>
+                {/* Desktop: side panel */}
+                <div className="hidden md:block shrink-0 overflow-y-auto py-6 pr-4 pl-3" style={{ width: rightWidth }}>
+                  {panel}
+                </div>
+              </>
+            );
+          })()}
 
         </div>{/* end body flex row */}
         </main>

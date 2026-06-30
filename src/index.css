@@ -220,6 +220,10 @@ body {
   }
 }
 
+/* hide scrollbar utility */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
 /* thin scrollbars for the timeline / lists */
 * {
   scrollbar-width: thin;
