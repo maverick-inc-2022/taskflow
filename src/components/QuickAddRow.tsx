@@ -51,7 +51,7 @@ export default function QuickAddRow({ onAdd, projects, defaultProject = "" }: Pr
         onBlur={() => { setFocused(false); commit(); }}
         onKeyDown={handleKey}
         placeholder="タスクを追加…"
-        className="flex-1 bg-transparent text-[15px] text-slate-500 outline-none placeholder:text-slate-400 focus:text-slate-800 focus:placeholder:text-slate-300"
+        className="flex-1 border-0 bg-transparent text-[15px] text-slate-500 outline-none placeholder:text-slate-400 focus:text-slate-800 focus:placeholder:text-slate-300"
         style={{ fontSize: "16px" }}
       />
 

@@ -333,7 +333,7 @@ export default function TaskItem({
               if (e.key === "Escape") { setEditValue(task.title); setEditing(false); }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full rounded bg-white px-1 text-[15px] text-slate-700 outline-none ring-2 ring-blue-400"
+            className="w-full bg-transparent px-1 text-[15px] text-slate-800 outline-none border-0"
           />
         ) : (
           <>
