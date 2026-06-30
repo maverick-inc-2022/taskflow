@@ -161,7 +161,7 @@ export default function App() {
 
   // resizable right column
   const [rightWidth, setRightWidth] = useState(420);
-  const [rightOpen, setRightOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [layout, setLayout] = useState<LayoutMode>(() => {
@@ -1223,28 +1223,30 @@ export default function App() {
             </div>
           )}
 
-          {/* Far-right collapsible sidebar — Calendar / Google Calendar / Gmail / Slack */}
-          <div
-            className="hidden md:block shrink-0 overflow-hidden transition-all duration-300 ease-in-out"
-            style={{ width: rightOpen ? 340 : 0 }}
-          >
-            <div className="h-full w-[340px] space-y-6 overflow-y-auto border-l border-slate-100 py-6 pr-5 pl-4">
-              <GoogleCalendarPanel
-                accessToken={googleCalToken}
-                onConnect={setGoogleCalToken}
-                onDisconnect={() => setGoogleCalToken(null)}
-                onAddTask={(title, due) => addTask({ title, due, project: "work", priority: "mid" })}
-              />
-              <GmailPanel
-                accessToken={gmailToken}
-                onConnect={setGmailToken}
-                onDisconnect={() => setGmailToken(null)}
-              />
-              <SlackPanel />
-            </div>
-          </div>{/* end far-right sidebar */}
         </div>{/* end body flex row */}
         </main>
+      </div>
+
+      {/* Far-right overlay sidebar — Calendar / Google Calendar / Gmail / Slack */}
+      {rightOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => setRightOpen(false)} />
+      )}
+      <div
+        className="fixed right-0 top-0 z-50 h-full w-[340px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl py-6 pr-5 pl-4 transition-transform duration-300 ease-in-out"
+        style={{ transform: rightOpen ? "translateX(0)" : "translateX(100%)" }}
+      >
+        <GoogleCalendarPanel
+          accessToken={googleCalToken}
+          onConnect={setGoogleCalToken}
+          onDisconnect={() => setGoogleCalToken(null)}
+          onAddTask={(title, due) => addTask({ title, due, project: "work", priority: "mid" })}
+        />
+        <GmailPanel
+          accessToken={gmailToken}
+          onConnect={setGmailToken}
+          onDisconnect={() => setGmailToken(null)}
+        />
+        <SlackPanel />
       </div>
 
       {showModal && (
