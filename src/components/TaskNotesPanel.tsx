@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import type { ChecklistItem, NoteAttachment, NoteMemo, Task } from "../types";
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -175,6 +175,33 @@ function Toolbar({ editorRef, cardRef, onAttachFile, onInsertCheckLine }: Toolba
     </div>
   );
 }
+
+// ── Stable contentEditable wrapper ─────────────────────────────────────────
+// React.memo prevents re-renders after mount, avoiding removeChild crash when
+// the sidebar collapses and triggers App re-render while the browser has
+// already modified the contentEditable's DOM children.
+
+interface StableEditorProps {
+  editorRef: React.RefObject<HTMLDivElement | null>;
+  onInput: () => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+}
+
+const StableEditor = memo(function StableEditor({ editorRef, onInput, onKeyDown, onClick }: StableEditorProps) {
+  return (
+    <div
+      ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={onInput}
+      onKeyDown={onKeyDown}
+      onClick={onClick}
+      className="note-editor min-h-[220px] px-3 py-2 text-sm text-slate-700 outline-none focus:outline-none"
+      data-placeholder="ここに入力…"
+    />
+  );
+});
 
 // ── Checklist ──────────────────────────────────────────────────────────────
 
@@ -408,6 +435,19 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
     e.target.value = "";
   };
 
+  // Stable callback refs — prevent contentEditable from re-rendering on parent re-renders
+  const _onInputRef = useRef(handleInput);
+  _onInputRef.current = handleInput;
+  const stableOnInput = useRef(() => _onInputRef.current()).current;
+
+  const _onKeyDownRef = useRef(handleEditorKeyDown);
+  _onKeyDownRef.current = handleEditorKeyDown;
+  const stableOnKeyDown = useRef((e: React.KeyboardEvent<HTMLDivElement>) => _onKeyDownRef.current(e)).current;
+
+  const _onClickRef = useRef(handleEditorClick);
+  _onClickRef.current = handleEditorClick;
+  const stableOnClick = useRef((e: React.MouseEvent<HTMLDivElement>) => _onClickRef.current(e)).current;
+
   return (
     <div ref={cardRef} className="flex max-h-[70vh] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       {/* Card header — fixed inside card */}
@@ -433,16 +473,12 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
-        {/* Rich-text editor */}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInput}
-          onKeyDown={handleEditorKeyDown}
-          onClick={handleEditorClick}
-          className="note-editor min-h-[220px] px-3 py-2 text-sm text-slate-700 outline-none focus:outline-none"
-          data-placeholder="ここに入力…"
+        {/* Rich-text editor — wrapped in memo to prevent React reconciliation crash with contentEditable */}
+        <StableEditor
+          editorRef={editorRef}
+          onInput={stableOnInput}
+          onKeyDown={stableOnKeyDown}
+          onClick={stableOnClick}
         />
 
       {/* Link preview popup */}

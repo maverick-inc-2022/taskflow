@@ -271,7 +271,7 @@ export default function TableView({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2 border-b border-slate-100 bg-blue-50 px-4 py-2 text-xs text-blue-700">
           <FilterIcon active />
@@ -279,7 +279,7 @@ export default function TableView({
           <button onClick={() => setFilters({})} className="ml-auto rounded px-2 py-0.5 font-medium hover:bg-blue-100">すべてクリア</button>
         </div>
       )}
-      <table className="w-full text-sm">
+      <table className="min-w-[600px] w-full text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold text-slate-500">
             <th className="w-10 px-3 py-2.5" />

@@ -1036,7 +1036,7 @@ export default function App() {
         {/* Body — resizable two-column */}
         <div ref={bodyRef} className="flex h-full">
           {/* Left column — scrolls independently */}
-          <div className="min-w-0 flex-1 overflow-y-auto">
+          <div className="min-w-0 flex-1 overflow-auto">
           {mainMode === "memos" ? (
             <MemoView
               memos={memos}
@@ -1048,7 +1048,7 @@ export default function App() {
               onReorderMemo={reorderMemo}
             />
           ) : (
-          <div className="px-3 py-4 md:px-8 md:py-6">
+          <div className="min-w-[480px] px-3 py-4 md:px-8 md:py-6">
           <div className="space-y-4 md:space-y-6">
             {layout === "kanban" ? (
               <KanbanView
