@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { people as staticPeople, projects as staticProjects, taskColors, projectColorOptions } from "../data";
 import type { Person, Priority, Project, RepeatConfig, RepeatMode, Task } from "../types";
 import { dueLabel, priorityMeta } from "../ui";
-import { GripIcon, RepeatIcon } from "../icons";
+import { GripIcon, RepeatIcon, StarIcon } from "../icons";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 
 interface Props {
@@ -79,6 +79,7 @@ export default function TaskItem({
   task,
   today,
   onToggle,
+  onStar,
   onSelect,
   onRename,
   onHover,
@@ -209,11 +210,11 @@ export default function TaskItem({
         <GripIcon className="h-4 w-4" />
       </span>
 
-      {/* completion checkbox */}
+      {/* completion checkbox — circle on mobile, square on desktop */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
         aria-label="完了"
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border-2 transition active:scale-90 ${
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full sm:rounded-[5px] border-2 transition active:scale-90 ${
           task.done
             ? "border-slate-400 bg-slate-400 text-white"
             : "border-slate-300 hover:border-blue-500"
@@ -245,18 +246,7 @@ export default function TaskItem({
       >
         {project?.label ?? "未割当"}
       </button>
-      {/* Mobile: color dot only */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          selectAndEdit();
-          if (onChangeProject) setShowProjectPicker((v) => !v);
-        }}
-        title={project?.label ?? "未割当"}
-        className={`sm:hidden shrink-0 h-2.5 w-2.5 rounded-full transition ${
-          task.done || !project ? "bg-slate-300" : project.color
-        } ${onChangeProject ? "hover:opacity-80" : "cursor-default"}`}
-      />
+      {/* Mobile: color dot — hidden (kept for desktop via sm:block badge above) */}
       {showProjectPicker && (
         <InlineDropdown
           anchorRef={projectBtnRef as React.RefObject<HTMLElement | null>}
@@ -377,6 +367,16 @@ export default function TaskItem({
           </>
         )}
       </span>
+
+      {/* Mobile-only: star button on right */}
+      {onStar && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onStar(task.id); }}
+          className={`sm:hidden shrink-0 p-1 transition ${task.starred ? "text-amber-400" : "text-slate-300 hover:text-slate-400"}`}
+        >
+          <StarIcon filled={task.starred} className="h-4 w-4" />
+        </button>
+      )}
 
       {/* owner — clickable, hidden on mobile */}
       <button
@@ -651,17 +651,17 @@ export default function TaskItem({
         )}
       </span>
 
-      {/* priority badge — clickable */}
+      {/* priority badge — desktop only */}
       {task.done ? (
-        <span className="flex h-6 w-12 sm:w-20 shrink-0 items-center justify-center rounded-md bg-slate-200 text-xs sm:text-sm font-semibold text-slate-400">
+        <span className="hidden sm:flex h-6 w-20 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-400">
           完了
         </span>
       ) : (
-        <span className="relative shrink-0">
+        <span className="relative hidden sm:block shrink-0">
           <span
             ref={priorityBtnRef}
             onClick={(e) => { e.stopPropagation(); selectAndEdit(); if (onChangePriority) setShowPriorityPicker((v) => !v); }}
-            className={`flex h-6 w-12 sm:w-20 items-center justify-center rounded-md text-xs sm:text-sm font-semibold ${pr.className} ${onChangePriority ? "cursor-pointer hover:opacity-80" : ""}`}
+            className={`flex h-6 w-20 items-center justify-center rounded-md text-sm font-semibold ${pr.className} ${onChangePriority ? "cursor-pointer hover:opacity-80" : ""}`}
           >
             {pr.label}
           </span>

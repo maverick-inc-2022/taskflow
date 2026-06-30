@@ -821,9 +821,10 @@ export default function App() {
         onAddProject={(label, color) => addProject(label, color, "📌")}
       />
     ) : (
+      /* Desktop only — mobile uses FAB */
       <button
         onClick={() => { setInlineGroup(groupKey); setInlineAfter(null); }}
-        className="flex w-full items-center gap-2 rounded-xl px-4 py-2 text-sm text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
+        className="hidden sm:flex w-full items-center gap-2 rounded-xl px-4 py-2 text-sm text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
       >
         <span className="text-lg leading-none">＋</span>
         タスクを追加
@@ -1163,8 +1164,8 @@ export default function App() {
                     </h3>
                     {listSortControl}
                   </div>
-                  {/* column header */}
-                  <div className="mb-1 flex items-center gap-3 border-b border-slate-100 px-3 pb-1.5 text-xs sm:text-sm font-medium text-slate-400">
+                  {/* column header — desktop only */}
+                  <div className="hidden sm:flex mb-1 items-center gap-3 border-b border-slate-100 px-3 pb-1.5 text-sm font-medium text-slate-400">
                     <span className="hidden sm:inline-block h-4 w-4 shrink-0" />
                     <span className="h-5 w-5 shrink-0" />
                     <span className="hidden sm:block w-28 shrink-0">プロジェクト名</span>
@@ -1299,6 +1300,19 @@ export default function App() {
 
         </div>{/* end body flex row */}
         </main>
+
+        {/* Mobile FAB — opens AddTaskModal */}
+        {mainMode === "tasks" && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 active:scale-95 transition"
+            aria-label="タスクを追加"
+          >
+            <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Far-right overlay sidebar — Calendar / Google Calendar / Gmail / Slack */}
