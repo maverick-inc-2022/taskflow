@@ -6,6 +6,7 @@ import GmailPanel from "./components/GmailPanel";
 import SlackPanel from "./components/SlackPanel";
 import GoogleCalendarPanel from "./components/GoogleCalendarPanel";
 import TaskNotesPanel from "./components/TaskNotesPanel";
+import MobileTaskDetail from "./components/MobileTaskDetail";
 import AddTaskModal from "./components/AddTaskModal";
 import InlineAddTask from "./components/InlineAddTask";
 import SearchModal from "./components/SearchModal";
@@ -1268,31 +1269,39 @@ export default function App() {
 
           {/* Notes panel — visible when a task or draft is selected (tasks mode only) */}
           {mainMode === "tasks" && (selectedId !== null || inlineAfter !== null) && (() => {
-            const panel = selectedId ? (() => {
-              const selectedTask = tasks.find((t) => t.id === selectedId);
-              return selectedTask ? (
-                <TaskNotesPanel
-                  task={selectedTask}
-                  onChangeMemos={(memos) => updateTask(selectedId, { memos })}
-                  onClose={() => setSelectedId(null)}
-                />
-              ) : null;
-            })() : (
+            const selectedTask = selectedId ? tasks.find((t) => t.id === selectedId) : null;
+            const desktopPanel = selectedTask ? (
+              <TaskNotesPanel
+                task={selectedTask}
+                onChangeMemos={(memos) => updateTask(selectedId!, { memos })}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : inlineAfter !== null ? (
               <TaskNotesPanel
                 task={{ id: "draft", title: "新しいタスク", project: "work", due: TODAY, priority: "mid", done: false, starred: false, memos: draftMemos }}
                 onChangeMemos={setDraftMemos}
                 onClose={() => { setInlineAfter(null); setDraftMemos([]); }}
               />
-            );
+            ) : null;
             return (
               <>
-                {/* Mobile: full-screen overlay */}
-                <div className="md:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
-                  {panel}
-                </div>
+                {/* Mobile: Google Tasks-style simple full-screen editor */}
+                {selectedTask ? (
+                  <MobileTaskDetail
+                    key={selectedTask.id}
+                    task={selectedTask}
+                    onChangeNotes={(notes) => updateTask(selectedId!, { notes })}
+                    onChangeTitle={(title) => updateTask(selectedId!, { title })}
+                    onClose={() => setSelectedId(null)}
+                  />
+                ) : inlineAfter !== null ? (
+                  <div className="md:hidden fixed inset-0 z-50 bg-white overflow-y-auto">
+                    {desktopPanel}
+                  </div>
+                ) : null}
                 {/* Desktop: side panel */}
                 <div className="hidden md:block shrink-0 overflow-y-auto py-6 pr-4 pl-3" style={{ width: rightWidth }}>
-                  {panel}
+                  {desktopPanel}
                 </div>
               </>
             );
