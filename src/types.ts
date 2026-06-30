@@ -36,6 +36,10 @@ export interface Task {
   memos?: NoteMemo[];
   /** Workflow status */
   status?: TaskStatus;
+  /** Unix ms timestamp when the task was created */
+  createdAt?: number;
+  /** Unix ms timestamp of last update */
+  updatedAt?: number;
 }
 
 export type TaskColor =

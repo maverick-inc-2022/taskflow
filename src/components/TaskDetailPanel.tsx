@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { repeatLabels, defaultProjects } from "../data";
 import { memosToPlainText, applyPlainTextToMemos } from "../memoText";
-import type { NoteMemo, Project, RepeatMode, Task, TaskStatus } from "../types";
+import type { NoteMemo, Project, RepeatConfig, RepeatMode, Task, TaskStatus } from "../types";
 import { dueLabel } from "../ui";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
+import CustomRepeatModal from "./CustomRepeatModal";
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
   { value: "not_started", label: "未着手",   color: "text-slate-400" },
@@ -77,10 +78,14 @@ export default function TaskDetailPanel({
   const [memoText, setMemoText] = useState(() => memosToPlainText(task.memos));
   const [newSub, setNewSub] = useState("");
   const [dateEdit, setDateEdit] = useState(false);
+  const [timeDraft, setTimeDraft] = useState(task.dueTime ?? "");
+  const [showCustomRepeat, setShowCustomRepeat] = useState(false);
+  const [repeatConfig, setRepeatConfig] = useState(task.repeatConfig ?? { interval: 1, unit: "week" as const, daysOfWeek: [], endType: "none" as const });
   const subtasks = task.subtasks ?? [];
 
   useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
   useEffect(() => { setMemoText(memosToPlainText(task.memos)); }, [task.id]);
+  useEffect(() => { setTimeDraft(task.dueTime ?? ""); }, [task.id, task.dueTime]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -173,8 +178,9 @@ export default function TaskDetailPanel({
                 <ClockIcon />
                 <input
                   type="time"
-                  value={task.dueTime ?? ""}
-                  onChange={(e) => onUpdate({ dueTime: e.target.value || undefined })}
+                  value={timeDraft}
+                  onChange={(e) => setTimeDraft(e.target.value)}
+                  onBlur={(e) => onUpdate({ dueTime: e.target.value || undefined })}
                   className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none"
                   style={{ colorScheme: "light" }}
                 />
@@ -207,7 +213,14 @@ export default function TaskDetailPanel({
           <RepIcon />
           <select
             value={task.repeat ?? "none"}
-            onChange={(e) => onUpdate({ repeat: e.target.value as RepeatMode })}
+            onChange={(e) => {
+              const val = e.target.value as RepeatMode;
+              if (val === "custom") {
+                setShowCustomRepeat(true);
+              } else {
+                onUpdate({ repeat: val });
+              }
+            }}
             className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
           >
             {(Object.keys(repeatLabels) as RepeatMode[]).map((r) => (
@@ -215,6 +228,19 @@ export default function TaskDetailPanel({
             ))}
           </select>
         </div>
+        {showCustomRepeat && (
+          <CustomRepeatModal
+            due={task.due}
+            repeat={task.repeat ?? "none"}
+            repeatConfig={repeatConfig}
+            onChange={(r, cfg) => {
+              const nextCfg = cfg ?? repeatConfig;
+              setRepeatConfig(nextCfg);
+              onUpdate({ repeat: r, repeatConfig: nextCfg });
+            }}
+            onClose={() => setShowCustomRepeat(false)}
+          />
+        )}
 
         {/* プロジェクト */}
         <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
@@ -323,6 +349,23 @@ export default function TaskDetailPanel({
 
         {/* ── Footer ── */}
         <div className="border-t border-slate-100 px-4 py-4">
+          {/* 作成日・更新日 */}
+          {(task.createdAt || task.updatedAt) && (
+            <div className="mb-4 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5">
+              {task.createdAt && (
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>作成日</span>
+                  <span>{new Date(task.createdAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+              )}
+              {task.updatedAt && (
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>更新日</span>
+                  <span>{new Date(task.updatedAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={() => onDelete(task.id)}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"

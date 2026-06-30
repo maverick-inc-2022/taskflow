@@ -440,7 +440,7 @@ export default function App() {
     );
   };
   const updateTask = (id: string, patch: Partial<Task>) =>
-    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)));
   // --- multi-select bulk actions ---
   const toggleSelect = (id: string) =>
     setSelectedIds((ids) =>
@@ -502,11 +502,13 @@ export default function App() {
     setNotifications((ns) =>
       ns.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
-  const addTask = (data: Omit<Task, "id" | "done" | "starred">) =>
+  const addTask = (data: Omit<Task, "id" | "done" | "starred">) => {
+    const now = Date.now();
     setTasks((ts) => [
       ...ts,
-      { ...data, id: `u${nextId++}`, done: false, starred: false },
+      { ...data, id: `u${nextId++}`, done: false, starred: false, createdAt: now, updatedAt: now },
     ]);
+  };
 
   /** Insert a new task right after `afterId` with full field data. */
   const commitInline = (afterId: string, data: import("./components/InlineAddTask").InlineCommitData) => {
