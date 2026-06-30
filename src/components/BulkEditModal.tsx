@@ -75,15 +75,6 @@ export default function BulkEditModal({ count, onApply, onClose, people: propPeo
           setProject,
           projects.map((p) => ({ value: p.id, label: p.label })),
         )}
-        {field(
-          "優先度",
-          priority,
-          setPriority,
-          (Object.keys(priorityMeta) as Priority[]).map((p) => ({
-            value: p,
-            label: priorityMeta[p].label,
-          })),
-        )}
         {field("今のボール（担当）", owner, setOwner, [
           { value: "", label: "未割り当て" },
           ...people.map((p) => ({ value: p.id, label: p.name })),

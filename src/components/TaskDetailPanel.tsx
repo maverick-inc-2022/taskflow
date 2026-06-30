@@ -152,17 +152,6 @@ export default function TaskDetailPanel({
                 {project.label}
               </span>
             )}
-            {/* Priority toggle chips */}
-            <div className="flex gap-1">
-              {priorityOptions.map((o) => (
-                <button key={o.id} onClick={() => onChangePriority(task.id, o.id)}
-                  className={`rounded-md px-2.5 py-1 text-sm font-medium transition ${
-                    task.priority === o.id ? o.color.replace("hover:", "") : "text-slate-400 hover:bg-slate-100"
-                  }`}>
-                  優先度 {o.label}
-                </button>
-              ))}
-            </div>
             {task.done && task.completedDate && (
               <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-700">
                 <CheckCircleIcon className="h-3.5 w-3.5" />

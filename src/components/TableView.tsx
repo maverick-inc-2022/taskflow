@@ -202,7 +202,6 @@ export default function TableView({
     { key: "title",    label: "タスク名" },
     { key: "owner",    label: "担当者",         width: "w-40" },
     { key: "due",      label: dueColLabel,      width: "w-36" },
-    { key: "priority", label: "優先度",          width: "w-20" },
   ];
 
   const activeFilterCount = Object.values(filters).filter((v) => v && v.length > 0).length;
@@ -258,13 +257,6 @@ export default function TableView({
           ) : (
             <span className="text-slate-500">{t.done && t.completedDate ? `完了 ${t.completedDate}` : dueLabel(t.due, today)}</span>
           )}
-        </td>
-        {/* Priority */}
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-          {onUpdate
-            ? <EditablePriority task={t} onSave={(v) => onUpdate(t.id, { priority: v })} />
-            : <span className={`inline-flex h-5 w-6 items-center justify-center rounded text-[11px] font-semibold ${priorityMeta[t.priority].className}`}>{priorityMeta[t.priority].label}</span>
-          }
         </td>
       </tr>
     );

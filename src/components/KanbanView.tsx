@@ -98,16 +98,6 @@ function KanbanCard({
       {/* Badges row */}
       <div className="flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
 
-        {/* Priority */}
-        {groupBy !== "priority" && (
-          onUpdateTask ? (
-            <EditablePriority task={t} onSave={(p) => onUpdateTask(t.id, { priority: p })} variant="badge" />
-          ) : (
-            <span className={`flex h-5 w-6 items-center justify-center rounded text-[10px] font-semibold ${pr.className}`}>
-              {pr.label}
-            </span>
-          )
-        )}
 
         {/* Project */}
         {onUpdateTask ? (
@@ -268,10 +258,9 @@ export default function KanbanView({
         <span className="text-xs font-medium text-slate-400">グループ：</span>
         <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5">
           {([
-            { id: "date"     as GroupBy, label: "日付" },
-            { id: "priority" as GroupBy, label: "優先度" },
-            { id: "owner"    as GroupBy, label: "担当者" },
-            { id: "project"  as GroupBy, label: "プロジェクト" },
+            { id: "date"    as GroupBy, label: "日付" },
+            { id: "owner"   as GroupBy, label: "担当者" },
+            { id: "project" as GroupBy, label: "プロジェクト" },
           ]).map((opt) => (
             <button
               key={opt.id}

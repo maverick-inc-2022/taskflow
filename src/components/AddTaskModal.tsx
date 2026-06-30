@@ -273,21 +273,6 @@ export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPe
           />
         )}
 
-        {/* 優先度 */}
-        <div className="mb-6">
-          <span className="mb-1 block text-sm font-medium text-slate-600">優先度</span>
-          <div className="flex gap-2">
-            {(Object.keys(priorityMeta) as Priority[]).map((p) => (
-              <button key={p} type="button" onClick={() => setPriority(p)}
-                className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
-                  priority === p ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"
-                }`}>
-                {priorityMeta[p].label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* メモ */}
         <div className="mb-6">
           <span className="mb-1 block text-sm font-medium text-slate-600">メモ (任意)</span>

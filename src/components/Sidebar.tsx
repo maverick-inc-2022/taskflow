@@ -9,6 +9,7 @@ import {
   PlusIcon,
   RepeatIcon,
   SettingsIcon,
+  StarIcon,
   XIcon,
 } from "../icons";
 
@@ -63,6 +64,7 @@ const navItems: {
   icon: typeof ListIcon;
 }[] = [
   { id: "today", label: "タスク", icon: ListIcon },
+  { id: "favorites", label: "お気に入り", icon: (p) => <StarIcon {...p} filled /> },
   { id: "repeat", label: "繰り返し", icon: RepeatIcon },
 ];
 

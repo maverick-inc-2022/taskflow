@@ -135,15 +135,6 @@ export default function InlineAddTask({
             onChange={(e) => setDue(e.target.value)}
             className={`${inputBase} flex-1 min-w-0`}
           />
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as Priority)}
-            className={`${inputBase} w-16 shrink-0 text-center font-semibold`}
-          >
-            {(Object.keys(priorityMeta) as Priority[]).map((p) => (
-              <option key={p} value={p}>{priorityMeta[p].label}</option>
-            ))}
-          </select>
         </div>
 
         {/* Row: repeat + actions */}
@@ -298,13 +289,6 @@ export default function InlineAddTask({
               className="w-20 rounded-md border border-slate-200 px-1 py-0.5 text-xs text-slate-600 outline-none focus:border-blue-400 bg-white" />
           </div>
 
-          {/* Priority */}
-          <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}
-            className="w-20 shrink-0 rounded-md border border-slate-200 px-1 py-0.5 text-sm font-semibold text-slate-600 outline-none focus:border-blue-400 bg-white text-center">
-            {(Object.keys(priorityMeta) as Priority[]).map((p) => (
-              <option key={p} value={p}>{priorityMeta[p].label}</option>
-            ))}
-          </select>
         </div>
 
         {/* Action row */}
