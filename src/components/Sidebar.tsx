@@ -37,7 +37,7 @@ interface Props {
   onOpenHelp: () => void;
   onAddTask: () => void;
   onAddProject: (label: string, color: string, icon: string) => void;
-  onUpdateProject: (id: ProjectId, patch: { color?: string; icon?: string }) => void;
+  onUpdateProject: (id: ProjectId, patch: { color?: string; icon?: string; label?: string }) => void;
   /** Current top-level mode */
   mainMode: "tasks" | "memos";
   onChangeMainMode: (mode: "tasks" | "memos") => void;
@@ -48,6 +48,7 @@ interface Props {
   onChangeMemoFilter?: (id: string | null) => void;
   onAddMemoCategory?: (name: string, color: string) => void;
   onDeleteMemoCategory?: (id: string) => void;
+  onRenameMemoCategory?: (id: string, name: string) => void;
   profile?: { name: string; avatar: string };
   onOpenProfile?: () => void;
 }
@@ -88,6 +89,7 @@ export default function Sidebar({
   onChangeMemoFilter,
   onAddMemoCategory,
   onDeleteMemoCategory,
+  onRenameMemoCategory,
   profile,
   onOpenProfile,
 }: Props) {
@@ -99,6 +101,14 @@ export default function Sidebar({
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState(projectColorOptions[0]);
   const [newProjectIcon, setNewProjectIcon] = useState(projectIconOptions[0]);
+
+  // Inline rename state
+  const [editingProjectId, setEditingProjectId] = useState<ProjectId | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState("");
+  // Delete confirmation
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState<string | null>(null);
 
   const commitNewProject = () => {
     const name = newProjectName.trim();
@@ -310,21 +320,62 @@ export default function Sidebar({
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cat.color}`} />
                     {!collapsed && (
                       <>
-                        <button onClick={() => onChangeMemoFilter?.(cat.id)} className="flex min-w-0 flex-1 items-center text-left">
-                          <span className="min-w-0 flex-1 truncate">{cat.name}</span>
-                          {count > 0 && (
-                            <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-                              {count}
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => onDeleteMemoCategory?.(cat.id)}
-                          title="削除"
-                          className="ml-1 shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
-                        >
-                          <XIcon className="h-3 w-3" />
-                        </button>
+                        {editingCategoryId === cat.id ? (
+                          <input
+                            autoFocus
+                            value={editingCategoryName}
+                            onChange={e => setEditingCategoryName(e.target.value)}
+                            onBlur={() => {
+                              const name = editingCategoryName.trim();
+                              if (name && name !== cat.name) onRenameMemoCategory?.(cat.id, name);
+                              setEditingCategoryId(null);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                const name = editingCategoryName.trim();
+                                if (name && name !== cat.name) onRenameMemoCategory?.(cat.id, name);
+                                setEditingCategoryId(null);
+                              }
+                              if (e.key === "Escape") setEditingCategoryId(null);
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => onChangeMemoFilter?.(cat.id)}
+                            onDoubleClick={() => { setEditingCategoryId(cat.id); setEditingCategoryName(cat.name); }}
+                            className="flex min-w-0 flex-1 items-center text-left"
+                          >
+                            <span className="min-w-0 flex-1 truncate">{cat.name}</span>
+                            {count > 0 && (
+                              <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+                                {count}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                        {confirmDeleteCategoryId === cat.id ? (
+                          <div className="ml-1 flex shrink-0 items-center gap-0.5">
+                            <span className="text-[10px] text-slate-400">削除？</span>
+                            <button
+                              onClick={() => { onDeleteMemoCategory?.(cat.id); setConfirmDeleteCategoryId(null); }}
+                              className="rounded px-1 py-0.5 text-[10px] font-medium text-red-500 hover:bg-red-50"
+                            >はい</button>
+                            <button
+                              onClick={() => setConfirmDeleteCategoryId(null)}
+                              className="rounded px-1 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100"
+                            >いいえ</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteCategoryId(cat.id)}
+                            title="削除"
+                            className="ml-1 shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                          >
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        )}
                       </>
                     )}
                     {collapsed && (
@@ -399,15 +450,41 @@ export default function Sidebar({
                   {/* color dot */}
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${p.color}`} />
                   {!collapsed && (
-                    <button onClick={() => onSelectProject(p.id)}
-                      className="flex min-w-0 flex-1 items-center text-left">
-                      <span className="min-w-0 flex-1 truncate">{p.label}</span>
-                      {projectCounts[p.id] ? (
-                        <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
-                        }`}>{projectCounts[p.id]}</span>
-                      ) : null}
-                    </button>
+                    editingProjectId === p.id ? (
+                      <input
+                        autoFocus
+                        value={editingProjectName}
+                        onChange={e => setEditingProjectName(e.target.value)}
+                        onBlur={() => {
+                          const name = editingProjectName.trim();
+                          if (name && name !== p.label) onUpdateProject(p.id, { label: name });
+                          setEditingProjectId(null);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            const name = editingProjectName.trim();
+                            if (name && name !== p.label) onUpdateProject(p.id, { label: name });
+                            setEditingProjectId(null);
+                          }
+                          if (e.key === "Escape") setEditingProjectId(null);
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        className="min-w-0 flex-1 rounded border border-blue-400 bg-white px-1 py-0 text-sm outline-none"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => onSelectProject(p.id)}
+                        onDoubleClick={() => { setEditingProjectId(p.id); setEditingProjectName(p.label); }}
+                        className="flex min-w-0 flex-1 items-center text-left"
+                      >
+                        <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                        {projectCounts[p.id] ? (
+                          <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+                          }`}>{projectCounts[p.id]}</span>
+                        ) : null}
+                      </button>
+                    )
                   )}
                   {collapsed && (
                     <button onClick={() => onSelectProject(p.id)} title={p.label} className="absolute inset-0" />

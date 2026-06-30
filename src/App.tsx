@@ -356,8 +356,11 @@ export default function App() {
     const id = `proj${nextProjectId++}`;
     setProjects((ps) => [...ps, { id, label, color, icon }]);
   };
-  const updateProject = (id: ProjectId, patch: { color?: string; icon?: string }) =>
+  const updateProject = (id: ProjectId, patch: { color?: string; icon?: string; label?: string }) =>
     setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+
+  const renameMemoCategory = (id: string, name: string) =>
+    setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
 
   // Header period label and navigation
   const periodLabel = useMemo(() => {
@@ -849,7 +852,7 @@ export default function App() {
     mainMode, onChangeMainMode: setMainMode,
     memoCategories, memoCounts, memoFilter,
     onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
-    onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory,
+    onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory, onRenameMemoCategory: renameMemoCategory,
     profile, onOpenProfile: () => setActiveModal("profile"),
   };
 
