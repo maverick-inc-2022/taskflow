@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { people as staticPeople, projects as staticProjects, taskColors } from "../data";
 import type { Person, Project, Task } from "../types";
-import { priorityMeta } from "../ui";
 import {
   EditableTitle,
   EditableProject,
   EditableOwner,
   EditableDue,
-  EditablePriority,
 } from "./InlineEditors";
 
 interface Props {
@@ -174,13 +172,12 @@ export default function CalendarView({
                   <th className="px-3 py-2.5 text-left">タスク名</th>
                   <th className="w-36 px-3 py-2.5 text-left">担当者</th>
                   <th className="w-28 px-3 py-2.5 text-left">期日</th>
-                  <th className="w-16 px-3 py-2.5 text-left">優先度</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedTasks.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-xs text-slate-300">
+                    <td colSpan={5} className="py-10 text-center text-xs text-slate-300">
                       この日のタスクはありません
                     </td>
                   </tr>
@@ -236,13 +233,6 @@ export default function CalendarView({
                         {onUpdate
                           ? <EditableDue task={t} today={today} onSave={(due, dueTime, repeat, repeatConfig) => onUpdate(t.id, { due, dueTime, repeat, repeatConfig })} />
                           : <span className="text-xs text-slate-500">{t.due}</span>
-                        }
-                      </td>
-                      {/* Priority */}
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                        {onUpdate
-                          ? <EditablePriority task={t} onSave={(v) => onUpdate(t.id, { priority: v })} />
-                          : <span className={`inline-flex h-5 w-6 items-center justify-center rounded text-[11px] font-semibold ${priorityMeta[t.priority].className}`}>{priorityMeta[t.priority].label}</span>
                         }
                       </td>
                     </tr>

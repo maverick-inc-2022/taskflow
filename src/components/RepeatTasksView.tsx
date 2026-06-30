@@ -2,7 +2,7 @@ import { AvatarDisplay } from "../avatarIcons";
 import { people as staticPeople, projects as staticProjects } from "../data";
 import type { Person, Project, Task } from "../types";
 import { priorityMeta, repeatLabel } from "../ui";
-import { EditableProject, EditableOwner, EditableRepeat, EditablePriority, EditableTitle } from "./InlineEditors";
+import { EditableProject, EditableOwner, EditableRepeat, EditableTitle } from "./InlineEditors";
 
 interface Props {
   tasks: Task[];
@@ -105,10 +105,6 @@ export default function RepeatTasksView({
           />
         </div>
 
-        {/* Priority */}
-        <div className="w-16 shrink-0 text-right" onClick={(e) => e.stopPropagation()}>
-          <EditablePriority task={t} onSave={(v) => onUpdateTask(t.id, { priority: v })} />
-        </div>
       </div>
     );
   };
@@ -124,7 +120,6 @@ export default function RepeatTasksView({
           <span className="flex-1">タスク名</span>
           <span className="w-36 shrink-0">担当者</span>
           <span className="w-40 shrink-0">繰り返し</span>
-          <span className="w-16 shrink-0 text-right">優先度</span>
         </div>
 
         {tasks.length === 0 ? (
