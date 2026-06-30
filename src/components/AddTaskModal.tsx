@@ -5,6 +5,7 @@ import { XIcon } from "../icons";
 import { priorityMeta } from "../ui";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 import CustomRepeatModal from "./CustomRepeatModal";
+import { applyPlainTextToMemos } from "../memoText";
 
 interface Props {
   onClose: () => void;
@@ -62,7 +63,8 @@ export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPe
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), project, due, dueTime: dueTime || undefined, priority, owner, repeat: repeat !== "none" ? repeat : undefined, repeatConfig: repeat === "custom" ? repeatConfig : undefined, notes: memo.trim() || undefined });
+    const memos = memo.trim() ? applyPlainTextToMemos(undefined, memo) : undefined;
+    onAdd({ title: title.trim(), project, due, dueTime: dueTime || undefined, priority, owner, repeat: repeat !== "none" ? repeat : undefined, repeatConfig: repeat === "custom" ? repeatConfig : undefined, memos });
     onClose();
   };
 

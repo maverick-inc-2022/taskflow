@@ -1290,7 +1290,7 @@ export default function App() {
                   <MobileTaskDetail
                     key={selectedTask.id}
                     task={selectedTask}
-                    onChangeNotes={(notes) => updateTask(selectedId!, { notes })}
+                    onChangeMemos={(memos) => updateTask(selectedId!, { memos })}
                     onChangeTitle={(title) => updateTask(selectedId!, { title })}
                     onClose={() => setSelectedId(null)}
                   />
