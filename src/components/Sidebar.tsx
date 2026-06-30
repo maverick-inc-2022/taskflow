@@ -49,6 +49,7 @@ interface Props {
   onAddMemoCategory?: (name: string, color: string) => void;
   onDeleteMemoCategory?: (id: string) => void;
   onRenameMemoCategory?: (id: string, name: string) => void;
+  onRecolorMemoCategory?: (id: string, color: string) => void;
   profile?: { name: string; avatar: string };
   onOpenProfile?: () => void;
 }
@@ -90,10 +91,12 @@ export default function Sidebar({
   onAddMemoCategory,
   onDeleteMemoCategory,
   onRenameMemoCategory,
+  onRecolorMemoCategory,
   profile,
   onOpenProfile,
 }: Props) {
   const [pickerProjectId, setPickerProjectId] = useState<ProjectId | null>(null);
+  const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [addingProject, setAddingProject] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -317,7 +320,12 @@ export default function Sidebar({
                   <div className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-sm transition ${
                     collapsed ? "justify-center px-0" : "px-3"
                   } ${active ? "bg-blue-50 font-medium text-blue-600" : "text-slate-600 hover:bg-slate-100"}`}>
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cat.color}`} />
+                    {/* color dot — click to open color picker */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPickerCategoryId(pickerCategoryId === cat.id ? null : cat.id); }}
+                      title="カラーを変更"
+                      className={`h-3 w-3 shrink-0 rounded-full ${cat.color} transition hover:ring-2 hover:ring-slate-300 hover:ring-offset-1`}
+                    />
                     {!collapsed && (
                       <>
                         {editingCategoryId === cat.id ? (
@@ -382,6 +390,25 @@ export default function Sidebar({
                       <button onClick={() => onChangeMemoFilter?.(cat.id)} title={cat.name} className="absolute inset-0" />
                     )}
                   </div>
+
+                  {/* Category color picker popover */}
+                  {pickerCategoryId === cat.id && !collapsed && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setPickerCategoryId(null)} />
+                      <div className="absolute left-8 top-0 z-20 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" style={{ width: 176 }}>
+                        <p className="mb-2 text-[10px] font-semibold text-slate-400">カラー</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {projectColorOptions.map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => { onRecolorMemoCategory?.(cat.id, c); setPickerCategoryId(null); }}
+                              className={`h-6 w-6 rounded-full ${c} transition hover:scale-110 ${cat.color === c ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </li>
               );
             })}

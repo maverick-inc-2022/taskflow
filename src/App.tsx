@@ -366,6 +366,8 @@ export default function App() {
 
   const renameMemoCategory = (id: string, name: string) =>
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+  const recolorMemoCategory = (id: string, color: string) =>
+    setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, color } : c));
 
   // Header period label and navigation
   const periodLabel = useMemo(() => {
@@ -869,7 +871,7 @@ export default function App() {
     mainMode, onChangeMainMode: setMainMode,
     memoCategories, memoCounts, memoFilter,
     onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
-    onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory, onRenameMemoCategory: renameMemoCategory,
+    onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory, onRenameMemoCategory: renameMemoCategory, onRecolorMemoCategory: recolorMemoCategory,
     profile, onOpenProfile: () => setActiveModal("profile"),
   };
 
