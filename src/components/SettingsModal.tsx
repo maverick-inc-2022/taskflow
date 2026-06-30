@@ -18,6 +18,7 @@ interface Props {
   people?: Person[];
   onAddPerson?: (name: string, avatar: string) => void;
   onRemovePerson?: (id: string) => void;
+  onUpdatePerson?: (id: string, name: string, avatar: string) => void;
   avatarChoices?: string[];
   googleCalConnected?: boolean;
   onGoogleCalConnect?: (token: string) => void;
@@ -72,7 +73,7 @@ function Row({
   );
 }
 
-export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
+export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
   const googleLogin = useGoogleLogin({
@@ -82,6 +83,22 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
   const [newName, setNewName] = useState("");
   const [newAvatar, setNewAvatar] = useState(DEFAULT_AVATAR);
   const [showChangePassword, setShowChangePassword] = useState(false);
+
+  // Person inline editing
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [editingPersonName, setEditingPersonName] = useState("");
+  const [editingPersonAvatar, setEditingPersonAvatar] = useState(DEFAULT_AVATAR);
+
+  const startEditPerson = (p: Person) => {
+    setEditingPersonId(p.id);
+    setEditingPersonName(p.name.replace("（自分）", ""));
+    setEditingPersonAvatar(p.avatar);
+  };
+  const commitEditPerson = (p: Person) => {
+    const name = editingPersonName.trim();
+    if (name) onUpdatePerson?.(p.id, p.id === "me" ? name + "（自分）" : name, editingPersonAvatar);
+    setEditingPersonId(null);
+  };
   const [pwCurrent, setPwCurrent] = useState("");
   const [pwNew, setPwNew] = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
@@ -202,18 +219,59 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
       </p>
       <div className="divide-y divide-slate-100">
         {people.map((p) => (
-          <div key={p.id} className="flex items-center justify-between py-2.5">
-            <div className="flex items-center gap-2.5">
-              <AvatarDisplay avatar={p.avatar} name={p.name} size={32} />
-              <span className="text-sm text-slate-700">{p.name.replace("（自分）", "")}</span>
-            </div>
-            {p.id !== "me" && (
-              <button
-                onClick={() => onRemovePerson?.(p.id)}
-                className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition"
-              >
-                削除
-              </button>
+          <div key={p.id} className="py-2.5">
+            {editingPersonId === p.id ? (
+              /* ── inline edit form ── */
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+                <input
+                  autoFocus
+                  value={editingPersonName}
+                  onChange={e => setEditingPersonName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") commitEditPerson(p); if (e.key === "Escape") setEditingPersonId(null); }}
+                  placeholder="名前"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-blue-400"
+                />
+                <AvatarPicker value={editingPersonAvatar} onChange={setEditingPersonAvatar} />
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setEditingPersonId(null)}
+                    className="flex-1 rounded-lg border border-slate-200 py-1.5 text-xs text-slate-500 hover:bg-white transition"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={() => commitEditPerson(p)}
+                    disabled={!editingPersonName.trim()}
+                    className="flex-1 rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40 transition"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── normal row ── */
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <AvatarDisplay avatar={p.avatar} name={p.name} size={32} />
+                  <span className="text-sm text-slate-700">{p.name.replace("（自分）", "")}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => startEditPerson(p)}
+                    className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                  >
+                    編集
+                  </button>
+                  {p.id !== "me" && (
+                    <button
+                      onClick={() => onRemovePerson?.(p.id)}
+                      className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         ))}

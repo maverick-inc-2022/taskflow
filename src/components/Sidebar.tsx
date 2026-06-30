@@ -447,8 +447,12 @@ export default function Sidebar({
                 <div className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-sm transition ${
                   collapsed ? "justify-center px-0" : "px-3"
                 } ${active ? "bg-blue-50 font-medium text-blue-600" : "text-slate-600 hover:bg-slate-100"}`}>
-                  {/* color dot */}
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${p.color}`} />
+                  {/* color dot — click to open color/icon picker */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPickerProjectId(pickerProjectId === p.id ? null : p.id); }}
+                    title="カラー・アイコンを変更"
+                    className={`h-3 w-3 shrink-0 rounded-full ${p.color} transition hover:ring-2 hover:ring-slate-300 hover:ring-offset-1`}
+                  />
                   {!collapsed && (
                     editingProjectId === p.id ? (
                       <input

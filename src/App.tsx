@@ -351,6 +351,8 @@ export default function App() {
   };
   const removePerson = (id: string) =>
     setPeople((ps) => ps.filter((p) => p.id !== id));
+  const updatePerson = (id: string, name: string, avatar: string) =>
+    setPeople((ps) => ps.map((p) => (p.id === id ? { ...p, name, avatar } : p)));
 
   // Projects (stateful for color editing + adding new)
   const [projects, setProjects] = useState<Project[]>(defaultProjects);
@@ -1350,6 +1352,7 @@ export default function App() {
           people={people}
           onAddPerson={addPerson}
           onRemovePerson={removePerson}
+          onUpdatePerson={updatePerson}
           avatarChoices={avatarChoices}
           googleCalConnected={!!googleCalToken}
           onGoogleCalConnect={setGoogleCalToken}
