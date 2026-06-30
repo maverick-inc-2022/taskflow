@@ -1099,7 +1099,7 @@ export default function App() {
         {/* Body — resizable two-column */}
         <div ref={bodyRef} className="flex h-full">
           {/* Left column — scrolls independently */}
-          <div className="min-w-0 flex-1 overflow-auto">
+          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {mainMode === "memos" ? (
             <MemoView
               memos={memos}
@@ -1111,7 +1111,7 @@ export default function App() {
               onReorderMemo={reorderMemo}
             />
           ) : (
-          <div className="min-w-[480px] max-w-[900px] px-3 py-4 md:px-8 md:py-6">
+          <div className="w-full max-w-[900px] px-3 py-4 md:px-8 md:py-6">
           <div className="space-y-4 md:space-y-6">
             {layout === "kanban" ? (
               <KanbanView
@@ -1293,7 +1293,7 @@ export default function App() {
 
       {/* Far-right overlay sidebar — Calendar / Google Calendar / Gmail / Slack */}
       <div
-        className="fixed right-0 top-0 z-50 h-full w-[340px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out"
+        className="fixed right-0 top-0 z-50 h-full w-[340px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out hidden md:block"
         style={{ transform: rightOpen ? "translateX(0)" : "translateX(100%)" }}
       >
         {/* Close button */}
