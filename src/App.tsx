@@ -160,7 +160,7 @@ export default function App() {
   const [draftMemos, setDraftMemos] = useState<import("./types").NoteMemo[]>([]);
 
   // resizable right column
-  const [rightWidth, setRightWidth] = useState(560);
+  const [rightWidth, setRightWidth] = useState(420);
   const [rightOpen, setRightOpen] = useState(true);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -583,7 +583,7 @@ export default function App() {
       const rect = bodyRef.current?.getBoundingClientRect();
       if (!rect) return;
       const w = rect.right - ev.clientX - 12;
-      setRightWidth(Math.min(680, Math.max(300, w)));
+      setRightWidth(Math.min(480, Math.max(300, w)));
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -1048,7 +1048,7 @@ export default function App() {
               onReorderMemo={reorderMemo}
             />
           ) : (
-          <div className="min-w-[480px] px-3 py-4 md:px-8 md:py-6">
+          <div className="min-w-[480px] max-w-[900px] px-3 py-4 md:px-8 md:py-6">
           <div className="space-y-4 md:space-y-6">
             {layout === "kanban" ? (
               <KanbanView
