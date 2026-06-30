@@ -337,19 +337,19 @@ export default function TaskItem({
           />
         ) : (
           <>
+            {/* Project dot + name above title */}
+            {project && (
+              <span className="flex items-center gap-1 mb-0.5">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${task.done ? "bg-slate-300" : project.color}`} />
+                <span className="text-xs text-slate-400 truncate">{project.label}</span>
+              </span>
+            )}
             <span
               className={`block truncate text-[15px] transition-colors duration-300 ${task.done ? "text-slate-400 line-through" : "text-slate-800"}`}
               onClick={(e) => { e.stopPropagation(); selectAndEdit(); }}
             >
               {task.title}
             </span>
-            {/* Project dot + name, always visible */}
-            {project && (
-              <span className="flex items-center gap-1 mt-0.5">
-                <span className={`h-2 w-2 shrink-0 rounded-full ${task.done ? "bg-slate-300" : project.color}`} />
-                <span className="text-xs text-slate-400 truncate">{project.label}</span>
-              </span>
-            )}
             <span
               className={`pointer-events-none absolute left-0 top-[10px] h-px origin-left bg-slate-400 transition-transform duration-300 ease-out ${task.done ? "scale-x-100" : "scale-x-0"}`}
               style={{ width: "100%" }}
