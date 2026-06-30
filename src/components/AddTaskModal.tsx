@@ -26,6 +26,7 @@ export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPe
   const [repeat, setRepeat] = useState<RepeatMode>(defaultRepeat ?? "none");
   const [repeatConfig, setRepeatConfig] = useState<RepeatConfig>({ interval: 1, unit: "week", daysOfWeek: [], endType: "none" });
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
+  const [memo, setMemo] = useState("");
 
   // Owner picker
   const [showOwner, setShowOwner] = useState(false);
@@ -61,7 +62,7 @@ export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPe
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onAdd({ title: title.trim(), project, due, dueTime: dueTime || undefined, priority, owner, repeat: repeat !== "none" ? repeat : undefined, repeatConfig: repeat === "custom" ? repeatConfig : undefined });
+    onAdd({ title: title.trim(), project, due, dueTime: dueTime || undefined, priority, owner, repeat: repeat !== "none" ? repeat : undefined, repeatConfig: repeat === "custom" ? repeatConfig : undefined, notes: memo.trim() || undefined });
     onClose();
   };
 
@@ -283,6 +284,18 @@ export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPe
               </button>
             ))}
           </div>
+        </div>
+
+        {/* メモ */}
+        <div className="mb-6">
+          <span className="mb-1 block text-sm font-medium text-slate-600">メモ (任意)</span>
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="メモを入力…"
+            rows={3}
+            className={`${fieldClass} resize-none`}
+          />
         </div>
 
         <div className="flex justify-end gap-2">
