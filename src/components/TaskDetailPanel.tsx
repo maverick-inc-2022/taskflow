@@ -79,6 +79,7 @@ export default function TaskDetailPanel({
   const [newSub, setNewSub] = useState("");
   const [dateEdit, setDateEdit] = useState(false);
   const [timeDraft, setTimeDraft] = useState(task.dueTime ?? "");
+  const timeInputRef = useRef<HTMLInputElement>(null);
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
   const [repeatConfig, setRepeatConfig] = useState(task.repeatConfig ?? { interval: 1, unit: "week" as const, daysOfWeek: [], endType: "none" as const });
   const subtasks = task.subtasks ?? [];
@@ -104,7 +105,13 @@ export default function TaskDetailPanel({
     onUpdate({ memos: newMemos });
   };
 
-  const dueFmt = task.done && task.completedDate ? task.completedDate : dueLabel(task.due, today);
+  const dueFmt = (() => {
+    if (task.done && task.completedDate) return task.completedDate;
+    if (!task.due) return "";
+    const d = new Date(task.due + "T00:00:00");
+    const wd = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+    return `${d.getMonth() + 1}/${d.getDate()} (${wd})`;
+  })();
 
   return (
     <section
@@ -166,7 +173,9 @@ export default function TaskDetailPanel({
         {/* 日付 + 時間（横並び） */}
         <div className="border-b border-slate-100">
           <div className="flex items-center gap-3 px-4 py-3.5">
-            <CalIcon />
+            <button onClick={() => setDateEdit((v) => !v)} className="shrink-0 text-slate-400 hover:text-blue-500 transition">
+              <CalIcon />
+            </button>
             <span
               className={`cursor-pointer text-sm ${task.due ? "text-slate-700" : "text-slate-400"} hover:underline`}
               onClick={() => setDateEdit((v) => !v)}
@@ -175,8 +184,11 @@ export default function TaskDetailPanel({
             </span>
             {task.due && (
               <>
-                <ClockIcon />
+                <button onClick={() => timeInputRef.current?.showPicker()} className="shrink-0 text-slate-400 hover:text-blue-500 transition">
+                  <ClockIcon />
+                </button>
                 <input
+                  ref={timeInputRef}
                   type="time"
                   value={timeDraft}
                   onChange={(e) => setTimeDraft(e.target.value)}
@@ -263,7 +275,7 @@ export default function TaskDetailPanel({
         {/* ステータス */}
         <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
           <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/>
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
           </svg>
           <select
             value={task.status ?? "not_started"}
@@ -350,22 +362,16 @@ export default function TaskDetailPanel({
         {/* ── Footer ── */}
         <div className="border-t border-slate-100 px-4 py-4">
           {/* 作成日・更新日 */}
-          {(task.createdAt || task.updatedAt) && (
-            <div className="mb-4 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5">
-              {task.createdAt && (
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>作成日</span>
-                  <span>{new Date(task.createdAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-              )}
-              {task.updatedAt && (
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>更新日</span>
-                  <span>{new Date(task.updatedAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-              )}
+          <div className="mb-4 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>作成日</span>
+              <span>{task.createdAt ? new Date(task.createdAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
             </div>
-          )}
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>更新日</span>
+              <span>{task.updatedAt ? new Date(task.updatedAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+            </div>
+          </div>
           <button
             onClick={() => onDelete(task.id)}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"

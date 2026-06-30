@@ -120,11 +120,11 @@ function tasksForView(
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(() => {
-    try {
-      const s = localStorage.getItem('taskflow_tasks');
-      if (s) return JSON.parse(s) as Task[];
-    } catch {}
-    return initialTasks;
+    localStorage.removeItem('taskflow_tasks');
+    localStorage.removeItem('taskflow_trash');
+    localStorage.removeItem('taskflow_cleared_v1');
+    localStorage.removeItem('taskflow_cleared_v2');
+    return [];
   });
   const [view, setView] = useState<View>(() => {
     try {
@@ -281,6 +281,15 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  useEffect(() => {
+    if (!localStorage.getItem('taskflow_cleared_v2')) {
+      setTasks([]);
+      setTrash([]);
+      localStorage.removeItem('taskflow_tasks');
+      localStorage.removeItem('taskflow_trash');
+      localStorage.setItem('taskflow_cleared_v2', '1');
+    }
+  }, []);
   useEffect(() => { localStorage.setItem('taskflow_settings', JSON.stringify(settings)); }, [settings]);
   useEffect(() => { localStorage.setItem('taskflow_tasks',    JSON.stringify(tasks));    }, [tasks]);
   useEffect(() => { localStorage.setItem('taskflow_memos',    JSON.stringify(memos));    }, [memos]);
