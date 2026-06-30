@@ -1258,6 +1258,8 @@ export default function App() {
                 task={selectedTask}
                 today={TODAY}
                 projects={projects}
+                people={people}
+                onAddPerson={addPerson}
                 onUpdate={(patch) => updateTask(selectedId!, patch)}
                 onClose={() => setSelectedId(null)}
                 onDelete={(id) => { deleteTask(id); setSelectedId(null); }}

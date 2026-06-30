@@ -102,7 +102,7 @@ export const initialNotifications: AppNotification[] = [
 ];
 
 /** The "today" the demo is anchored to (matches the mockup). */
-export const TODAY = "2024-05-20";
+export const TODAY = new Date().toLocaleDateString("sv-SE");
 
 export const defaultProjects: Project[] = [
   { id: "work", label: "仕事", color: "bg-blue-500", icon: "💼" },

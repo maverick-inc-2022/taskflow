@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { repeatLabels, defaultProjects } from "../data";
+import { repeatLabels, defaultProjects, people as defaultPeople } from "../data";
 import { memosToPlainText, applyPlainTextToMemos } from "../memoText";
-import type { NoteMemo, Project, RepeatConfig, RepeatMode, Task, TaskStatus } from "../types";
+import type { NoteMemo, Person, Project, RepeatConfig, RepeatMode, Task } from "../types";
 import { dueLabel } from "../ui";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
+import { AvatarDisplay } from "../avatarIcons";
 import CustomRepeatModal from "./CustomRepeatModal";
-
-const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
-  { value: "not_started", label: "未着手",   color: "text-slate-400" },
-  { value: "in_progress", label: "進行中",   color: "text-blue-500"  },
-  { value: "in_review",   label: "レビュー中", color: "text-amber-500" },
-  { value: "done",        label: "完了",     color: "text-emerald-500" },
-];
 
 interface Props {
   task: Task;
   today: string;
   projects?: Project[];
+  people?: Person[];
+  onAddPerson?: (name: string, avatar: string) => void;
   onUpdate: (patch: Partial<Task>) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
@@ -65,6 +61,8 @@ export default function TaskDetailPanel({
   task,
   today,
   projects: propProjects,
+  people: propPeople,
+  onAddPerson,
   onUpdate,
   onClose,
   onDelete,
@@ -72,6 +70,7 @@ export default function TaskDetailPanel({
   onToggle,
 }: Props) {
   const projects = propProjects ?? defaultProjects;
+  const people   = propPeople  ?? defaultPeople;
   const project = projects.find((p) => p.id === task.project);
 
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -82,6 +81,11 @@ export default function TaskDetailPanel({
   const timeInputRef = useRef<HTMLInputElement>(null);
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
   const [repeatConfig, setRepeatConfig] = useState(task.repeatConfig ?? { interval: 1, unit: "week" as const, daysOfWeek: [], endType: "none" as const });
+  const [ownerOpen, setOwnerOpen] = useState(false);
+  const [newPersonName, setNewPersonName] = useState("");
+  const ownerRef = useRef<HTMLDivElement>(null);
+  const [richMemoOpen, setRichMemoOpen] = useState(false);
+  const richEditorRef = useRef<HTMLDivElement>(null);
   const subtasks = task.subtasks ?? [];
 
   useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
@@ -103,6 +107,17 @@ export default function TaskDetailPanel({
   const commitMemo = () => {
     const newMemos = applyPlainTextToMemos(task.memos, memoText);
     onUpdate({ memos: newMemos });
+  };
+
+  const commitRichMemo = () => {
+    const html = richEditorRef.current?.innerHTML ?? "";
+    const base = task.memos?.[0] ?? { id: "memo1", label: "メモ①", checklist: [], attachments: [] };
+    onUpdate({ memos: [{ ...base, html }] });
+  };
+
+  const richExec = (cmd: string, val?: string) => {
+    richEditorRef.current?.focus();
+    document.execCommand(cmd, false, val);
   };
 
   const dueFmt = (() => {
@@ -193,7 +208,7 @@ export default function TaskDetailPanel({
                   value={timeDraft}
                   onChange={(e) => setTimeDraft(e.target.value)}
                   onBlur={(e) => onUpdate({ dueTime: e.target.value || undefined })}
-                  className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none"
+                  className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                   style={{ colorScheme: "light" }}
                 />
               </>
@@ -272,36 +287,190 @@ export default function TaskDetailPanel({
           )}
         </div>
 
-        {/* ステータス */}
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-          </svg>
-          <select
-            value={task.status ?? "not_started"}
-            onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
-            className={`flex-1 border-0 bg-transparent text-sm outline-none cursor-pointer ${
-              STATUS_OPTIONS.find(s => s.value === (task.status ?? "not_started"))?.color ?? "text-slate-400"
-            }`}
+        {/* タスク所有者 */}
+        <div className="relative border-b border-slate-100" ref={ownerRef}>
+          <div
+            className="flex cursor-pointer items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition"
+            onClick={() => setOwnerOpen((v) => !v)}
           >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            {task.owner ? (() => {
+              const p = people.find((x) => x.id === task.owner);
+              return p ? (
+                <span className="flex items-center gap-2 text-sm text-slate-700">
+                  <AvatarDisplay avatar={p.avatar} name={p.name} size={20} />
+                  {p.name.replace("（自分）", "")}
+                </span>
+              ) : <span className="text-sm text-slate-400">所有者を選択</span>;
+            })() : (
+              <span className="text-sm text-slate-400">所有者を選択</span>
+            )}
+            <svg viewBox="0 0 24 24" className="ml-auto h-3.5 w-3.5 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </div>
+          {ownerOpen && (
+            <div className="absolute left-0 right-0 z-20 border border-slate-200 bg-white shadow-lg rounded-b-xl overflow-hidden">
+              {/* 自分 shortcut */}
+              {(() => {
+                const me = people.find((p) => p.id === "me");
+                return me ? (
+                  <button
+                    onClick={() => { onUpdate({ owner: "me" }); setOwnerOpen(false); }}
+                    className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-blue-50 ${task.owner === "me" ? "bg-blue-50 text-blue-600" : "text-slate-700"}`}
+                  >
+                    <AvatarDisplay avatar={me.avatar} name={me.name} size={22} />
+                    <span>自分</span>
+                    {task.owner === "me" && <span className="ml-auto text-blue-500">✓</span>}
+                  </button>
+                ) : null;
+              })()}
+              {/* その他のメンバー */}
+              {people.filter((p) => p.id !== "me").map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { onUpdate({ owner: p.id }); setOwnerOpen(false); }}
+                  className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-slate-50 ${task.owner === p.id ? "bg-blue-50 text-blue-600" : "text-slate-700"}`}
+                >
+                  <AvatarDisplay avatar={p.avatar} name={p.name} size={22} />
+                  <span>{p.name}</span>
+                  {task.owner === p.id && <span className="ml-auto text-blue-500">✓</span>}
+                </button>
+              ))}
+              {/* 選択解除 */}
+              {task.owner && (
+                <button
+                  onClick={() => { onUpdate({ owner: undefined }); setOwnerOpen(false); }}
+                  className="flex w-full items-center gap-2.5 border-t border-slate-100 px-4 py-2.5 text-sm text-slate-400 transition hover:bg-slate-50"
+                >
+                  <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-slate-300 text-xs">×</span>
+                  解除
+                </button>
+              )}
+              {/* ＋ 新規追加 */}
+              {onAddPerson && (
+                <div className="border-t border-slate-100 px-3 py-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={newPersonName}
+                      onChange={(e) => setNewPersonName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newPersonName.trim()) {
+                          onAddPerson(newPersonName.trim(), "icon:male-adult:#64748b");
+                          setNewPersonName("");
+                        }
+                      }}
+                      placeholder="名前を入力して Enter"
+                      className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-400"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newPersonName.trim()) {
+                          onAddPerson(newPersonName.trim(), "icon:male-adult:#64748b");
+                          setNewPersonName("");
+                        }
+                      }}
+                      className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                    >＋</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* メモ */}
-        <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-3.5">
-          <MemoIcon />
-          <textarea
-            value={memoText}
-            onChange={(e) => setMemoText(e.target.value)}
-            onBlur={commitMemo}
-            placeholder="メモを追加"
-            rows={5}
-            className="min-h-[7rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-            style={{ fontSize: "14px", lineHeight: "1.6" }}
-          />
+        <div className="border-b border-slate-100">
+          <div className="flex items-start gap-3 px-4 py-3.5">
+            <MemoIcon />
+            {!richMemoOpen && (
+              <textarea
+                value={memoText}
+                onChange={(e) => setMemoText(e.target.value)}
+                onBlur={commitMemo}
+                placeholder="メモを追加"
+                rows={5}
+                className="min-h-[14rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                style={{ fontSize: "14px", lineHeight: "1.6" }}
+              />
+            )}
+            {richMemoOpen && <div className="flex-1" />}
+            <button
+              onClick={() => {
+                if (!richMemoOpen) {
+                  commitMemo();
+                  setTimeout(() => {
+                    if (richEditorRef.current) {
+                      const html = task.memos?.[0]?.html ?? memoText.replace(/\n/g, "<br>");
+                      richEditorRef.current.innerHTML = html;
+                      richEditorRef.current.focus();
+                    }
+                  }, 50);
+                } else {
+                  commitRichMemo();
+                }
+                setRichMemoOpen((v) => !v);
+              }}
+              title={richMemoOpen ? "シンプルモードに切り替え" : "リッチエディタを開く"}
+              className={`shrink-0 rounded-md p-1 text-xs transition ${richMemoOpen ? "bg-blue-100 text-blue-600" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+            </button>
+          </div>
+          {richMemoOpen && (
+            <div className="border-t border-slate-100">
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-100 bg-slate-50 px-2 py-1">
+                <select
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onChange={(e) => { richEditorRef.current?.focus(); document.execCommand("formatBlock", false, e.target.value); }}
+                  className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
+                >
+                  <option value="p">本文</option>
+                  <option value="h3">見出し</option>
+                  <option value="blockquote">引用</option>
+                </select>
+                <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
+                {[
+                  ["•≡", "箇条書き", () => richExec("insertUnorderedList")],
+                  ["1.", "番号リスト", () => richExec("insertOrderedList")],
+                ].map(([lbl, title, fn]) => (
+                  <button key={title as string} onMouseDown={(e) => { e.preventDefault(); (fn as () => void)(); }}
+                    className="flex h-6 min-w-[24px] items-center justify-center rounded px-1 text-[11px] font-bold text-slate-600 hover:bg-white transition">
+                    {lbl as string}
+                  </button>
+                ))}
+                <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
+                <button onMouseDown={(e) => { e.preventDefault(); richExec("bold"); }}
+                  className="flex h-6 w-6 items-center justify-center rounded text-xs font-bold text-slate-600 hover:bg-white transition"><b>B</b></button>
+                <button onMouseDown={(e) => { e.preventDefault(); richExec("underline"); }}
+                  className="flex h-6 w-6 items-center justify-center rounded text-xs text-slate-600 hover:bg-white transition"><u>U</u></button>
+                <button onMouseDown={(e) => { e.preventDefault(); richExec("italic"); }}
+                  className="flex h-6 w-6 items-center justify-center rounded text-xs italic text-slate-600 hover:bg-white transition">I</button>
+                <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
+                {["#ef4444","#f97316","#22c55e","#3b82f6","#8b5cf6"].map((c) => (
+                  <button key={c} onMouseDown={(e) => { e.preventDefault(); richExec("foreColor", c); }}
+                    className="h-4 w-4 rounded-full border border-white shadow-sm transition hover:scale-110"
+                    style={{ background: c }} />
+                ))}
+                <button onMouseDown={(e) => { e.preventDefault(); richExec("foreColor", "inherit"); }}
+                  className="h-4 w-4 rounded-full border border-slate-300 bg-slate-700 transition hover:scale-110" />
+              </div>
+              {/* Editor */}
+              <div
+                ref={richEditorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onBlur={commitRichMemo}
+                className="min-h-[8rem] px-4 py-3 text-sm text-slate-700 outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500 [&_a]:text-blue-500 [&_a]:underline"
+                style={{ lineHeight: "1.7" }}
+              />
+            </div>
+          )}
         </div>
 
         {/* サブタスク */}
