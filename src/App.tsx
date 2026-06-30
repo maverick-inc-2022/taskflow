@@ -106,7 +106,7 @@ function tasksForView(
   if (view === "favorites") return tasks.filter((t) => t.starred);
   if (view === "completed") return tasks.filter((t) => t.done);
   if (view === "repeat")
-    return tasks.filter((t) => t.repeat && t.repeat !== "none");
+    return tasks.filter((t) => t.repeat && t.repeat !== "none" && !t.done);
   if (view === "project")
     return tasks.filter((t) => t.project === selectedProject);
   if (view === "all" || view === "today") return tasks;
@@ -414,17 +414,23 @@ export default function App() {
 
   const toggle = (id: string) => {
     const t = tasks.find((x) => x.id === id);
-    // Completing a repeating task spawns the next occurrence.
+    // Completing a repeating task advances its due date to the next occurrence (no clone).
     if (t && !t.done && t.repeat && t.repeat !== "none") {
-      const clone: Task = {
-        ...t,
-        id: `u${nextId++}`,
-        done: false,
-        completedAt: undefined,
-        due: nextDue(t.due, t.repeat),
-        subtasks: t.subtasks?.map((s) => ({ ...s, done: false })),
-      };
-      setTasks((ts) => [...ts, clone]);
+      setTasks((ts) =>
+        ts.map((x) =>
+          x.id === id
+            ? {
+                ...x,
+                due: nextDue(t.due, t.repeat!),
+                done: false,
+                completedAt: undefined,
+                completedDate: undefined,
+                subtasks: x.subtasks?.map((s) => ({ ...s, done: false })),
+              }
+            : x,
+        ),
+      );
+      return;
     }
     setTasks((ts) =>
       ts.map((x) =>
@@ -451,7 +457,10 @@ export default function App() {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
     setTasks((ts) => ts.filter((x) => x.id !== id));
-    setTrash((tr) => [t, ...tr]);
+    // Repeat tasks are permanently deleted (no trash).
+    if (!t.repeat || t.repeat === "none") {
+      setTrash((tr) => [t, ...tr]);
+    }
     setSelectedId((cur) => (cur === id ? null : cur));
   };
   const restoreTask = (id: string) => {
