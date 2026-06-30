@@ -868,7 +868,7 @@ export default function App() {
     onAddTask: () => setShowModal(true),
     onAddProject: addProject,
     onUpdateProject: updateProject,
-    mainMode, onChangeMainMode: setMainMode,
+    mainMode, onChangeMainMode: (mode: "tasks" | "memos") => { setMainMode(mode); if (mode === "memos") setRightOpen(false); },
     memoCategories, memoCounts, memoFilter,
     onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
     onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory, onRenameMemoCategory: renameMemoCategory, onRecolorMemoCategory: recolorMemoCategory,
