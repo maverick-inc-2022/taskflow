@@ -9,6 +9,7 @@ import TaskNotesPanel from "./components/TaskNotesPanel";
 import MobileTaskDetail from "./components/MobileTaskDetail";
 import AddTaskModal from "./components/AddTaskModal";
 import InlineAddTask from "./components/InlineAddTask";
+import QuickAddRow from "./components/QuickAddRow";
 import SearchModal from "./components/SearchModal";
 import NotificationsPopover from "./components/NotificationsPopover";
 import SettingsModal from "./components/SettingsModal";
@@ -806,31 +807,12 @@ export default function App() {
       </Fragment>
     ));
 
-  const inlineAddButton = (groupKey: string, defaultProject?: string) => (
-    inlineGroup === groupKey ? (
-      <InlineAddTask
-        onCommit={commitInlineBottom}
-        onCancel={() => { setInlineGroup(null); setDraftMemos([]); }}
-        projects={projects}
-        people={people}
-        defaultProject={defaultProject}
-        defaultDue={TODAY}
-        today={TODAY}
-        memos={draftMemos}
-        onChangeMemos={setDraftMemos}
-        onAddPerson={addPerson}
-        onAddProject={(label, color) => addProject(label, color, "📌")}
-      />
-    ) : (
-      /* Desktop only — mobile uses FAB */
-      <button
-        onClick={() => { setInlineGroup(groupKey); setInlineAfter(null); }}
-        className="hidden sm:flex w-full items-center gap-2 rounded-xl px-4 py-2 text-sm text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition"
-      >
-        <span className="text-lg leading-none">＋</span>
-        タスクを追加
-      </button>
-    )
+  const inlineAddButton = (_groupKey: string, defaultProject?: string) => (
+    <QuickAddRow
+      projects={projects}
+      defaultProject={defaultProject}
+      onAdd={(title, project, due) => addTask({ title, project, due, priority: "mid" })}
+    />
   );
 
   const renderGrouped = (gs: TaskGroup[]) =>
@@ -852,7 +834,7 @@ export default function App() {
             >
               {g.label}:
             </h3>
-            <div className="space-y-0.5">{renderList(g.tasks)}</div>
+            <div className="space-y-0">{renderList(g.tasks)}</div>
             {inlineAddButton(`group:${g.key}`)}
           </div>
         ))}
@@ -1165,7 +1147,7 @@ export default function App() {
                     </h3>
                     {listSortControl}
                   </div>
-                  <div className="space-y-0.5">{renderList(todayActive)}</div>
+                  <div className="space-y-0">{renderList(todayActive)}</div>
                   {inlineAddButton("today")}
                 </section>
 
@@ -1177,7 +1159,7 @@ export default function App() {
                         ({doneToday.length}件)
                       </span>
                     </h3>
-                    <div className="space-y-0.5">{renderList(doneToday)}</div>
+                    <div className="space-y-0">{renderList(doneToday)}</div>
                   </section>
                 )}
               </>
@@ -1236,7 +1218,7 @@ export default function App() {
                         )}
                       </div>
                     </div>
-                    <div className="space-y-0.5">{renderList(doneInView)}</div>
+                    <div className="space-y-0">{renderList(doneInView)}</div>
                   </section>
                 )}
               </>

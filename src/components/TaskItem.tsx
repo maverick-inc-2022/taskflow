@@ -190,7 +190,7 @@ export default function TaskItem({
       onDragOver={(e) => e.preventDefault()}
       onDrop={() => onDrop?.()}
       onDragEnd={() => onDragEnd?.()}
-      className={`group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 transition ${
+      className={`group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition ${
         task.done ? "" : stripe ? `border-l-4 ${stripe}` : ""
       } ${dragging ? "opacity-40" : isOthers && !task.done ? "opacity-40 hover:opacity-70" : ""} ${dragOver ? "ring-2 ring-blue-300" : ""} ${
         task.done
