@@ -294,6 +294,7 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkPreview, setLinkPreview] = useState<{ href: string; x: number; y: number } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync HTML into state on user input
   const handleInput = useCallback(() => {
@@ -453,11 +454,31 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
       {/* Card header — fixed inside card */}
       <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2">
         <span className="text-xs font-semibold text-slate-500">{memo.label}</span>
-        <button onClick={onDelete}
-          className="text-slate-300 transition hover:text-red-400"
-          title="このメモを削除">
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-slate-400">削除しますか？</span>
+            <button
+              onClick={onDelete}
+              className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-500 hover:bg-red-50 transition"
+            >
+              はい
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 transition"
+            >
+              いいえ
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-slate-300 transition hover:text-red-400"
+            title="このメモを削除"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        )}
       </div>
 
       {/* Toolbar — fixed inside card */}
