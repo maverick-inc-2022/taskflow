@@ -1,15 +1,12 @@
-import { AvatarDisplay } from "../avatarIcons";
+import { useState } from "react";
 import { people as staticPeople, projects as staticProjects } from "../data";
 import type { Person, Project, Task } from "../types";
-import { priorityMeta, repeatLabel } from "../ui";
 import { EditableProject, EditableOwner, EditableRepeat, EditableTitle } from "./InlineEditors";
 
 interface Props {
   tasks: Task[];
-  trashedTasks: Task[];
   today: string;
   onDelete: (id: string) => void;
-  onRestore: (id: string) => void;
   onUpdateTask: (id: string, patch: Partial<Task>) => void;
   onAddPerson?: (name: string, avatar: string) => void;
   onAddProject?: (label: string, color: string) => void;
@@ -29,23 +26,10 @@ function TrashIcon() {
   );
 }
 
-function RepeatIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 ${className}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 1l4 4-4 4"/>
-      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-      <path d="M7 23l-4-4 4-4"/>
-      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>
-  );
-}
-
 export default function RepeatTasksView({
   tasks,
-  trashedTasks,
   today,
   onDelete,
-  onRestore,
   onUpdateTask,
   onAddPerson,
   onAddProject,
@@ -55,19 +39,37 @@ export default function RepeatTasksView({
 }: Props) {
   const projects = propProjects ?? staticProjects;
   const people   = propPeople  ?? staticPeople;
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const renderRow = (t: Task) => {
 
     return (
       <div key={t.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-slate-50">
-        {/* Trash button */}
-        <button
-          onClick={() => onDelete(t.id)}
-          title="削除"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-300 transition hover:bg-red-50 hover:text-red-400"
-        >
-          <TrashIcon />
-        </button>
+        {/* Trash button — repeat tasks are deleted permanently, so confirm first */}
+        {confirmId === t.id ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => { onDelete(t.id); setConfirmId(null); }}
+              className="rounded-md bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600"
+            >
+              削除
+            </button>
+            <button
+              onClick={() => setConfirmId(null)}
+              className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-200"
+            >
+              取消
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmId(t.id)}
+            title="削除"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-300 transition hover:bg-red-50 hover:text-red-400"
+          >
+            <TrashIcon />
+          </button>
+        )}
 
         {/* Project */}
         <div className="w-28 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -158,66 +160,6 @@ export default function RepeatTasksView({
           </div>
         )}
       </section>
-
-      {/* Deleted / trashed section */}
-      {trashedTasks.length > 0 && (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
-            <TrashIcon />
-            <span className="text-sm font-semibold text-slate-500">削除済み</span>
-            <span className="text-xs text-slate-400">({trashedTasks.length}件)</span>
-          </div>
-          <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
-            {trashedTasks.map((t) => {
-              const proj   = projects.find((p) => p.id === t.project);
-              const owner  = people.find((p) => p.id === t.owner);
-              const rLabel = repeatLabel(t.repeat, t.repeatConfig);
-              const pr     = priorityMeta[t.priority];
-              return (
-                <div key={t.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  {/* Top: project + priority */}
-                  <div className="flex items-center gap-1.5">
-                    {proj && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500 border border-slate-200">
-                        <span className={`h-1.5 w-1.5 rounded-full ${proj.color}`} />
-                        {proj.label}
-                      </span>
-                    )}
-                    <span className={`ml-auto inline-flex h-5 w-6 items-center justify-center rounded text-[10px] font-semibold ${pr.className}`}>
-                      {pr.label}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <p className="text-sm text-slate-500 line-through">{t.title}</p>
-
-                  {/* Repeat + owner */}
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs text-violet-500">
-                      <RepeatIcon className="text-violet-400" />
-                      {rLabel}
-                    </span>
-                    {owner && (
-                      <span className="ml-auto flex items-center gap-1">
-                        <AvatarDisplay avatar={owner.avatar} name={owner.name} size={16} />
-                        <span className="text-[10px] text-slate-400">{owner.name.replace("（自分）", "")}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Restore button */}
-                  <button
-                    onClick={() => onRestore(t.id)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white py-1 text-xs font-medium text-slate-500 transition hover:border-blue-300 hover:text-blue-600"
-                  >
-                    復元
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

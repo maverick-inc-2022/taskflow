@@ -129,14 +129,38 @@ export default function TaskDetailPanel({
   };
 
   const commitRichMemo = () => {
-    const html = richEditorRef.current?.innerHTML ?? "";
-    const base = task.memos?.[0] ?? { id: "memo1", label: "メモ①", checklist: [], attachments: [] };
-    onUpdate({ memos: [{ ...base, html }] });
+    if (!richEditorRef.current) return;
+    const html = richEditorRef.current.innerHTML ?? "";
+    const existing = task.memos ?? [];
+    const base = existing[0] ?? { id: "memo1", label: "メモ①", checklist: [], attachments: [] };
+    // Preserve any additional memos (メモ②, ③…) beyond the first.
+    const merged = existing.length > 0
+      ? existing.map((m, i) => (i === 0 ? { ...m, html } : m))
+      : [{ ...base, html }];
+    onUpdate({ memos: merged });
   };
 
   const richExec = (cmd: string, val?: string) => {
     richEditorRef.current?.focus();
     document.execCommand(cmd, false, val);
+  };
+
+  // Flush unsaved memo edits when the panel unmounts (e.g. switching tasks),
+  // since blur may not fire before React tears the component down.
+  const commitRichMemoRef = useRef(commitRichMemo);
+  commitRichMemoRef.current = commitRichMemo;
+  useEffect(() => {
+    return () => { commitRichMemoRef.current(); };
+  }, []);
+
+  // Open the native time picker safely (showPicker is unsupported on iOS Safari).
+  const openTimePicker = () => {
+    const el = timeInputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try { el.showPicker(); return; } catch { /* fall through to focus */ }
+    }
+    el.focus();
   };
 
   const dueFmt = (() => {
@@ -218,7 +242,7 @@ export default function TaskDetailPanel({
             </span>
             {task.due && (
               <>
-                <button onClick={() => timeInputRef.current?.showPicker()} className="ml-1 shrink-0 text-slate-400 hover:text-blue-500 transition">
+                <button onClick={openTimePicker} className="ml-1 shrink-0 text-slate-400 hover:text-blue-500 transition">
                   <ClockIcon />
                 </button>
                 <input
@@ -249,7 +273,7 @@ export default function TaskDetailPanel({
             </select>
             {task.due && !task.done && (
               <button
-                onClick={(e) => { e.stopPropagation(); onUpdate({ due: "" }); }}
+                onClick={(e) => { e.stopPropagation(); onUpdate({ due: "", dueTime: undefined }); }}
                 className="shrink-0 text-slate-300 hover:text-slate-500"
               >
                 <XIcon className="h-3.5 w-3.5" />
@@ -425,7 +449,8 @@ export default function TaskDetailPanel({
                   className="h-4 w-4 rounded-full border border-white shadow-sm transition hover:scale-110"
                   style={{ background: c }} />
               ))}
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("foreColor", "inherit"); }}
+              <button onMouseDown={(e) => { e.preventDefault(); richExec("removeFormat"); }}
+                title="色をリセット"
                 className="h-4 w-4 rounded-full border border-slate-300 bg-slate-700 transition hover:scale-110" />
             </div>
           )}

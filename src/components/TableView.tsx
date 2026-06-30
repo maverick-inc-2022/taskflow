@@ -63,22 +63,22 @@ function FilterIcon({ active }: { active: boolean }) {
   );
 }
 
-function getTaskValue(t: Task, col: ColKey, projects: Project[], people: Person[]): string {
+function getTaskValue(t: Task, col: ColKey, projects: Project[], people: Person[], showRepeat = false): string {
   switch (col) {
     case "title":    return t.title.toLowerCase();
     case "project":  return projects.find((p) => p.id === t.project)?.label ?? "";
     case "owner":    return people.find((p) => p.id === t.owner)?.name ?? "￿";
-    case "due":      return t.due + (t.dueTime ?? "");
+    case "due":      return showRepeat ? repeatLabel(t.repeat, t.repeatConfig) : t.due + (t.dueTime ?? "");
     case "priority": return String(PRIORITY_ORDER[t.priority] ?? 9);
   }
 }
 
-function getFilterLabel(t: Task, col: ColKey, projects: Project[], people: Person[], today: string): string {
+function getFilterLabel(t: Task, col: ColKey, projects: Project[], people: Person[], today: string, showRepeat = false): string {
   switch (col) {
     case "title":    return t.title;
     case "project":  return projects.find((p) => p.id === t.project)?.label ?? "なし";
     case "owner":    return people.find((p) => p.id === t.owner)?.name?.replace("（自分）", "") ?? "未割当";
-    case "due":      return t.done && t.completedDate ? `完了 ${t.completedDate}` : dueLabel(t.due, today) || t.due;
+    case "due":      return showRepeat ? repeatLabel(t.repeat, t.repeatConfig) : (t.done && t.completedDate ? `完了 ${t.completedDate}` : dueLabel(t.due, today) || t.due);
     case "priority": return priorityMeta[t.priority]?.label ?? t.priority;
   }
 }
@@ -176,16 +176,16 @@ export default function TableView({
   const clearFilter = useCallback((col: ColKey) => setFilters((prev) => ({ ...prev, [col]: [] })), []);
   const closeFilter = useCallback(() => setOpenFilter(null), []);
 
-  const uniqueValues = (col: ColKey) => Array.from(new Set(tasks.map((t) => getFilterLabel(t, col, projects, people, today)))).sort();
+  const uniqueValues = (col: ColKey) => Array.from(new Set(tasks.map((t) => getFilterLabel(t, col, projects, people, today, showRepeatCol && col === "due")))).sort();
 
   const filtered = tasks.filter((t) =>
-    (Object.entries(filters) as [ColKey, string[]][]).every(([col, vals]) => !vals?.length || vals.includes(getFilterLabel(t, col, projects, people, today)))
+    (Object.entries(filters) as [ColKey, string[]][]).every(([col, vals]) => !vals?.length || vals.includes(getFilterLabel(t, col, projects, people, today, showRepeatCol && col === "due")))
   );
 
   const sorted = sortCol
     ? [...filtered].sort((a, b) => {
-        const av = getTaskValue(a, sortCol, projects, people);
-        const bv = getTaskValue(b, sortCol, projects, people);
+        const av = getTaskValue(a, sortCol, projects, people, showRepeatCol && sortCol === "due");
+        const bv = getTaskValue(b, sortCol, projects, people, showRepeatCol && sortCol === "due");
         const cmp = av < bv ? -1 : av > bv ? 1 : 0;
         return sortDir === "asc" ? cmp : -cmp;
       })

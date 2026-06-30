@@ -27,7 +27,7 @@ export default function CustomRepeatModal({ due, repeat, repeatConfig, onChange,
   const defaultConfig = (): RepeatConfig => ({
     interval: 1,
     unit: "week",
-    daysOfWeek: [new Date(due + "T00:00:00").getDay()],
+    daysOfWeek: due ? [new Date(due + "T00:00:00").getDay()] : [],
     endType: "none",
   });
 
@@ -134,7 +134,7 @@ export function RepeatSelector({ due, repeat, repeatConfig, onChange, className 
   const [showCustom, setShowCustom] = useState(false);
   const defaultConfig: RepeatConfig = repeatConfig ?? {
     interval: 1, unit: "week",
-    daysOfWeek: [new Date(due + "T00:00:00").getDay()],
+    daysOfWeek: due ? [new Date(due + "T00:00:00").getDay()] : [],
     endType: "none",
   };
 

@@ -179,6 +179,19 @@ export default function TaskItem({
     if (!task.done) { setEditValue(task.title); setEditing(true); }
   };
 
+  // Repeat tasks never stay "done" (they advance to the next occurrence),
+  // so briefly flash the checkmark to confirm the tap before advancing.
+  const [repeatFlash, setRepeatFlash] = useState(false);
+  const handleToggle = () => {
+    const isRepeat = !!task.repeat && task.repeat !== "none";
+    if (isRepeat && !task.done) {
+      setRepeatFlash(true);
+      window.setTimeout(() => { setRepeatFlash(false); onToggle(task.id); }, 350);
+    } else {
+      onToggle(task.id);
+    }
+  };
+
   return (
     <div
       draggable={draggable}
@@ -212,17 +225,17 @@ export default function TaskItem({
 
       {/* completion checkbox — always circle */}
       <button
-        onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
+        onClick={(e) => { e.stopPropagation(); handleToggle(); }}
         aria-label="完了"
         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90 ${
-          task.done
+          task.done || repeatFlash
             ? "border-slate-400 bg-slate-400 text-white"
             : "border-slate-300 hover:border-blue-500"
         }`}
       >
         <svg
           viewBox="0 0 24 24"
-          className={`h-3.5 w-3.5 transition-all duration-200 ${task.done ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
+          className={`h-3.5 w-3.5 transition-all duration-200 ${task.done || repeatFlash ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
           fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
         >
           <path d="m20 6-11 11-5-5" />

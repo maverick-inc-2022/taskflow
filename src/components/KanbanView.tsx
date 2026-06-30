@@ -183,12 +183,14 @@ function KanbanCard({
 function buildDateCols(tasks: Task[], today: string): Col[] {
   const todayDate = new Date(today + "T00:00:00");
   const in7 = new Date(todayDate); in7.setDate(todayDate.getDate() + 7);
-  const in7Str = in7.toISOString().slice(0, 10);
+  // local date string (avoid toISOString's UTC off-by-one for JST etc.)
+  const in7Str = `${in7.getFullYear()}-${String(in7.getMonth() + 1).padStart(2, "0")}-${String(in7.getDate()).padStart(2, "0")}`;
   const buckets = [
-    { id: "overdue", label: "期限切れ", color: "bg-rose-500",   test: (t: Task) => t.due < today && !t.done },
+    { id: "overdue", label: "期限切れ", color: "bg-rose-500",   test: (t: Task) => !!t.due && t.due < today && !t.done },
     { id: "today",   label: "今日",     color: "bg-blue-500",   test: (t: Task) => t.due === today },
-    { id: "week",    label: "今週",     color: "bg-violet-500", test: (t: Task) => t.due > today && t.due <= in7Str },
-    { id: "later",   label: "それ以降", color: "bg-slate-400",  test: (t: Task) => t.due > in7Str },
+    { id: "week",    label: "今週",     color: "bg-violet-500", test: (t: Task) => !!t.due && t.due > today && t.due <= in7Str },
+    // "それ以降" also catches tasks with no due date so they never vanish.
+    { id: "later",   label: "それ以降", color: "bg-slate-400",  test: (t: Task) => !t.due || t.due > in7Str },
   ];
   return buckets.map((b) => ({ id: b.id, label: b.label, color: b.color, tasks: tasks.filter(b.test) }));
 }

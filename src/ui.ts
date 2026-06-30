@@ -62,16 +62,48 @@ function sectionLabel(due: string, today: string): string {
   return `${d.getMonth() + 1}月${d.getDate()}日(${wd})`;
 }
 
-/** Advance a YYYY-MM-DD date by one recurrence step. */
-export function nextDue(due: string, repeat: RepeatMode): string {
-  const d = new Date(due + "T00:00:00");
-  if (repeat === "daily") d.setDate(d.getDate() + 1);
-  else if (repeat === "weekly") d.setDate(d.getDate() + 7);
-  else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
+const fmtYMD = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+};
+
+/** Advance a YYYY-MM-DD date by one recurrence step for every repeat mode. */
+export function nextDue(due: string, repeat: RepeatMode, config?: RepeatConfig): string {
+  if (!due) return due;
+  const d = new Date(due + "T00:00:00");
+  switch (repeat) {
+    case "daily":
+      d.setDate(d.getDate() + 1);
+      break;
+    case "weekly":
+      d.setDate(d.getDate() + 7);
+      break;
+    case "weekly-weekday":
+      // advance to the next weekday (skip Sat/Sun)
+      do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+      break;
+    case "monthly":
+      d.setMonth(d.getMonth() + 1);
+      break;
+    case "yearly":
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+    case "custom": {
+      const interval = Math.max(1, config?.interval ?? 1);
+      const unit = config?.unit ?? "week";
+      if (unit === "day") d.setDate(d.getDate() + interval);
+      else if (unit === "week") d.setDate(d.getDate() + interval * 7);
+      else if (unit === "month") d.setMonth(d.getMonth() + interval);
+      else if (unit === "year") d.setFullYear(d.getFullYear() + interval);
+      break;
+    }
+    default:
+      // "none" or unknown — no advance
+      break;
+  }
+  return fmtYMD(d);
 }
 
 /**

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { Person, Project, RepeatMode, Task } from "../types";
 import { repeatLabels, defaultProjects, people as defaultPeople } from "../data";
 import { AvatarDisplay } from "../avatarIcons";
-import { applyPlainTextToMemos } from "../memoText";
+import { applyPlainTextToMemos, memosToPlainText } from "../memoText";
 import CustomRepeatModal from "./CustomRepeatModal";
 
 interface Props {
@@ -30,10 +30,13 @@ export default function MobileTaskDetail({
   const people   = propPeople  ?? defaultPeople;
 
   const [title, setTitle]     = useState(task.title);
-  const [memoText, setMemoText] = useState(() => task.memos?.[0]?.html
-    ? task.memos[0].html.replace(/<[^>]+>/g, "")
-    : (task.memos?.[0] ? "" : ""));
+  const [memoText, setMemoText] = useState(() => memosToPlainText(task.memos));
   const [newSub, setNewSub]   = useState("");
+
+  // Resync local drafts if the task changes underneath us (defensive — the
+  // parent also remounts via key, but this prevents cross-task contamination).
+  useEffect(() => { setTitle(task.title); }, [task.id, task.title]);
+  useEffect(() => { setMemoText(memosToPlainText(task.memos)); }, [task.id]);
   const [showRepeat, setShowRepeat] = useState(false);
   const [showOwner, setShowOwner]   = useState(false);
   const [newPersonName, setNewPersonName] = useState("");
@@ -135,7 +138,7 @@ export default function MobileTaskDetail({
           <input
             type="date"
             value={task.due ?? ""}
-            onChange={(e) => onUpdate({ due: e.target.value })}
+            onChange={(e) => onUpdate(e.target.value ? { due: e.target.value } : { due: "", dueTime: undefined })}
             className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none"
             style={{ colorScheme: "light", fontSize: "16px" }}
           />
@@ -377,7 +380,7 @@ export default function MobileTaskDetail({
           due={task.due}
           repeat={task.repeat ?? "none"}
           repeatConfig={task.repeatConfig ?? { interval: 1, unit: "week", daysOfWeek: [], endType: "none" }}
-          onChange={(r, cfg) => { onUpdate({ repeat: r, repeatConfig: cfg ?? undefined }); }}
+          onChange={(r, cfg) => { onUpdate({ repeat: r, repeatConfig: cfg ?? task.repeatConfig }); }}
           onClose={() => setShowCustomRepeat(false)}
         />
       )}

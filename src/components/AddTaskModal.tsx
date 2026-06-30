@@ -74,7 +74,7 @@ export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, d
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSub, setNewSub] = useState("");
   const [repeat, setRepeat] = useState<RepeatMode>(defaultRepeat ?? "none");
-  const [repeatConfig, setRepeatConfig] = useState<RepeatConfig>({ interval: 1, unit: "week", daysOfWeek: [], endType: "none" });
+  const [repeatConfig, setRepeatConfig] = useState<RepeatConfig>({ interval: 1, unit: "week", daysOfWeek: due ? [new Date(due + "T00:00:00").getDay()] : [], endType: "none" });
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
 
   // Project add

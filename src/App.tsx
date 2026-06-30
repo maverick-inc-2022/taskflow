@@ -84,6 +84,27 @@ const viewTitle: Record<View, string> = {
 let nextId = 100;
 let completeCounter = 1;
 let subId = 1;
+let memoSeq = 1; // disambiguates memo ids created within the same millisecond
+
+/** Seed the module-level id/counter state from restored data so freshly
+ *  generated ids never collide with persisted ones after a reload. */
+function seedCounters(tasks: Task[]) {
+  let maxU = 99;
+  let maxSub = 0;
+  let maxComplete = 0;
+  for (const t of tasks) {
+    const m = /^u(\d+)$/.exec(t.id);
+    if (m) maxU = Math.max(maxU, parseInt(m[1], 10));
+    if (typeof t.completedAt === "number") maxComplete = Math.max(maxComplete, t.completedAt);
+    for (const s of t.subtasks ?? []) {
+      const sm = /^st(\d+)$/.exec(s.id);
+      if (sm) maxSub = Math.max(maxSub, parseInt(sm[1], 10));
+    }
+  }
+  nextId = maxU + 1;
+  subId = maxSub + 1;
+  completeCounter = maxComplete + 1;
+}
 
 const fmtDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -114,17 +135,19 @@ function tasksForView(
   const horizon = new Date(t);
   if (view === "week") horizon.setDate(t.getDate() + 6);
   else horizon.setMonth(t.getMonth() + 1, 0); // end of this month
-  const max = horizon.toISOString().slice(0, 10);
+  const max = fmtDate(horizon); // local date — avoid UTC off-by-one
   return tasks.filter((task) => task.due <= max);
 }
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(() => {
+    let restored = initialTasks;
     try {
       const s = localStorage.getItem('taskflow_tasks');
-      if (s) return JSON.parse(s) as Task[];
+      if (s) restored = JSON.parse(s) as Task[];
     } catch {}
-    return initialTasks;
+    seedCounters(restored);
+    return restored;
   });
   const [view, setView] = useState<View>(() => {
     try {
@@ -194,7 +217,7 @@ export default function App() {
 
   const addMemo = () => {
     const now = Date.now();
-    setMemos(prev => [{ id: `memo_${now}`, content: "", color: "yellow", createdAt: now, updatedAt: now }, ...prev]);
+    setMemos(prev => [{ id: `memo_${now}_${memoSeq++}`, content: "", color: "yellow", createdAt: now, updatedAt: now }, ...prev]);
   };
   const updateMemo = (id: string, patch: Partial<StickyMemo>) =>
     setMemos(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
@@ -211,10 +234,12 @@ export default function App() {
     });
   };
   const duplicateMemo = (id: string) => {
-    const src = memos.find(m => m.id === id);
-    if (!src) return;
     const now = Date.now();
-    setMemos(prev => [{ ...src, id: `memo_dup_${now}`, createdAt: now, updatedAt: now }, ...prev]);
+    setMemos(prev => {
+      const src = prev.find(m => m.id === id);
+      if (!src) return prev;
+      return [{ ...src, id: `memo_dup_${now}_${memoSeq++}`, createdAt: now, updatedAt: now }, ...prev];
+    });
   };
   const addMemoCategory = (name: string, color: string) => {
     const id = `cat_${Date.now()}`;
@@ -222,6 +247,8 @@ export default function App() {
   };
   const deleteMemoCategory = (id: string) => {
     setMemoCategories(prev => prev.filter(c => c.id !== id));
+    // Clear the now-dangling categoryId from memos so they remain reachable.
+    setMemos(prev => prev.map(m => m.categoryId === id ? { ...m, categoryId: undefined } : m));
     setMemoFilter(prev => prev === id ? null : prev);
   };
 
@@ -281,14 +308,21 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => { localStorage.setItem('taskflow_settings', JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem('taskflow_tasks',    JSON.stringify(tasks));    }, [tasks]);
-  useEffect(() => { localStorage.setItem('taskflow_memos',    JSON.stringify(memos));    }, [memos]);
-  useEffect(() => { localStorage.setItem('taskflow_trash',    JSON.stringify(trash));    }, [trash]);
+  const safeSetItem = (key: string, value: unknown) => {
+    try { localStorage.setItem(key, JSON.stringify(value)); }
+    catch { /* quota exceeded or storage unavailable — keep running in-memory */ }
+  };
+  useEffect(() => { safeSetItem('taskflow_settings', settings); }, [settings]);
+  useEffect(() => { safeSetItem('taskflow_tasks',    tasks);    }, [tasks]);
+  useEffect(() => { safeSetItem('taskflow_memos',    memos);    }, [memos]);
+  useEffect(() => { safeSetItem('taskflow_trash',    trash);    }, [trash]);
 
   // ── Supabase cloud sync ──
   const [syncedEmail, setSyncedEmail] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Block autosave until the initial cloud load has resolved, so empty/stale
+  // local state can't overwrite real cloud data on a fresh device.
+  const cloudHydratedRef = useRef(false);
 
   const loadFromCloud = async (email: string) => {
     try {
@@ -296,10 +330,11 @@ export default function App() {
       if (!res.ok) return;
       const data = await res.json() as { tasks: Task[]; memos: StickyMemo[]; settings: Settings } | null;
       if (!data) return;
-      if (data.tasks) { setTasks(data.tasks); localStorage.setItem('taskflow_tasks', JSON.stringify(data.tasks)); }
+      if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks', JSON.stringify(data.tasks)); }
       if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
       if (data.settings) { setSettings(s => ({ ...s, ...data.settings })); }
     } catch { /* network error, use local data */ }
+    finally { cloudHydratedRef.current = true; }
   };
 
   const saveToCloud = async (email: string) => {
@@ -317,6 +352,9 @@ export default function App() {
 
   useEffect(() => {
     if (!syncedEmail) return;
+    // Don't save back until the first cloud load completed (avoids clobbering
+    // cloud data with empty local state right after login).
+    if (!cloudHydratedRef.current) return;
     const t = setTimeout(() => saveToCloud(syncedEmail), 2000);
     return () => clearTimeout(t);
   }, [tasks, memos, settings, syncedEmail]);
@@ -329,6 +367,7 @@ export default function App() {
     const account = (() => { try { const s = localStorage.getItem('taskflow_account'); return s ? JSON.parse(s) : null; } catch { return null; } })();
     setIsLoggedIn(true);
     setNeedsPasswordChange(account?.isInitial ?? false);
+    cloudHydratedRef.current = false;
     setSyncedEmail(email);
     loadFromCloud(email);
   };
@@ -351,8 +390,11 @@ export default function App() {
     const id = `person${nextPersonId++}`;
     setPeople((ps) => [...ps, { id, name, avatar }]);
   };
-  const removePerson = (id: string) =>
+  const removePerson = (id: string) => {
     setPeople((ps) => ps.filter((p) => p.id !== id));
+    // Clear the owner on any task that referenced the removed person.
+    setTasks((ts) => ts.map((t) => (t.owner === id ? { ...t, owner: undefined } : t)));
+  };
   const updatePerson = (id: string, name: string, avatar: string) =>
     setPeople((ps) => ps.map((p) => (p.id === id ? { ...p, name, avatar } : p)));
 
@@ -416,15 +458,41 @@ export default function App() {
     const t = tasks.find((x) => x.id === id);
     // Completing a repeating task advances its due date to the next occurrence (no clone).
     if (t && !t.done && t.repeat && t.repeat !== "none") {
+      const upcoming = nextDue(t.due, t.repeat, t.repeatConfig);
+      const cfg = t.repeatConfig;
+      // Honor an end condition: stop recurring and complete normally.
+      const reachedEndDate =
+        cfg?.endType === "date" && cfg.endDate && upcoming > cfg.endDate;
+      const reachedEndCount = cfg?.endType === "count" && (cfg.endCount ?? 1) <= 1;
+      if (reachedEndDate || reachedEndCount) {
+        setTasks((ts) =>
+          ts.map((x) =>
+            x.id === id
+              ? {
+                  ...x,
+                  done: true,
+                  completedAt: completeCounter++,
+                  completedDate: completionStamp(),
+                }
+              : x,
+          ),
+        );
+        return;
+      }
       setTasks((ts) =>
         ts.map((x) =>
           x.id === id
             ? {
                 ...x,
-                due: nextDue(t.due, t.repeat!),
+                due: upcoming,
                 done: false,
                 completedAt: undefined,
                 completedDate: undefined,
+                // decrement remaining count when an end-count is set
+                repeatConfig:
+                  cfg?.endType === "count"
+                    ? { ...cfg, endCount: (cfg.endCount ?? 1) - 1 }
+                    : x.repeatConfig,
                 subtasks: x.subtasks?.map((s) => ({ ...s, done: false })),
               }
             : x,
@@ -471,7 +539,8 @@ export default function App() {
   };
   const bulkDelete = () => {
     const sel = new Set(selectedIds);
-    const removed = tasks.filter((t) => sel.has(t.id));
+    // Mirror deleteTask: repeat tasks are purged permanently (not trashed).
+    const removed = tasks.filter((t) => sel.has(t.id) && (!t.repeat || t.repeat === "none"));
     setTasks((ts) => ts.filter((t) => !sel.has(t.id)));
     setTrash((tr) => [...removed, ...tr]);
     setSelectedId((cur) => (cur && sel.has(cur) ? null : cur));
@@ -1177,10 +1246,8 @@ export default function App() {
             ) : view === "repeat" ? (
               <RepeatTasksView
                 tasks={tasksForView(tasks, "repeat", null)}
-                trashedTasks={trash.filter((t) => t.repeat && t.repeat !== "none")}
                 today={TODAY}
                 onDelete={deleteTask}
-                onRestore={restoreTask}
                 onUpdateTask={updateTask}
                 onAddPerson={addPerson}
                 onAddProject={(label, color) => addProject(label, color, "📌")}
