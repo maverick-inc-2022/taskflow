@@ -1302,7 +1302,7 @@ export default function App() {
         </main>
 
         {/* Mobile FAB — opens AddTaskModal */}
-        {mainMode === "tasks" && (
+        {mainMode === "tasks" && !mobileSidebarOpen && (
           <button
             onClick={() => setShowModal(true)}
             className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 active:scale-95 transition"
