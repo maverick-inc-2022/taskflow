@@ -1286,25 +1286,37 @@ export default function App() {
       </div>
 
       {/* Far-right overlay sidebar — Calendar / Google Calendar / Gmail / Slack */}
-      {rightOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setRightOpen(false)} />
-      )}
       <div
-        className="fixed right-0 top-0 z-50 h-full w-[340px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl py-6 pr-5 pl-4 transition-transform duration-300 ease-in-out"
+        className="fixed right-0 top-0 z-50 h-full w-[340px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out"
         style={{ transform: rightOpen ? "translateX(0)" : "translateX(100%)" }}
       >
-        <GoogleCalendarPanel
-          accessToken={googleCalToken}
-          onConnect={setGoogleCalToken}
-          onDisconnect={() => setGoogleCalToken(null)}
-          onAddTask={(title, due) => addTask({ title, due, project: "work", priority: "mid" })}
-        />
-        <GmailPanel
-          accessToken={gmailToken}
-          onConnect={setGmailToken}
-          onDisconnect={() => setGmailToken(null)}
-        />
-        <SlackPanel />
+        {/* Close button */}
+        <div className="sticky top-0 z-10 flex justify-end border-b border-slate-100 bg-white px-3 py-2">
+          <button
+            onClick={() => setRightOpen(false)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            title="閉じる"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+            閉じる
+          </button>
+        </div>
+        <div className="space-y-6 px-4 py-4">
+          <GoogleCalendarPanel
+            accessToken={googleCalToken}
+            onConnect={setGoogleCalToken}
+            onDisconnect={() => setGoogleCalToken(null)}
+            onAddTask={(title, due) => addTask({ title, due, project: "work", priority: "mid" })}
+          />
+          <GmailPanel
+            accessToken={gmailToken}
+            onConnect={setGmailToken}
+            onDisconnect={() => setGmailToken(null)}
+          />
+          <SlackPanel />
+        </div>
       </div>
 
       {showModal && (
