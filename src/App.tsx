@@ -165,7 +165,7 @@ export default function App() {
   const [sortMode, setSortMode] = useState<SortMode>("date");
   const [sortOpen, setSortOpen] = useState(false);
   // sort mode for active task lists
-  type ListSort = "date" | "priority" | "owner" | "project" | "custom";
+  type ListSort = "date" | "project" | "custom";
   const [listSort, setListSort] = useState<ListSort>("date");
   const [listSortOpen, setListSortOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectId | null>(null);
@@ -275,23 +275,40 @@ export default function App() {
     localStorage.getItem('taskflow_banner_dismissed') === '1'
   );
   const exportData = () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      tasks,
-      trash,
-      memos,
-      settings,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const headers = ["ID", "タイトル", "プロジェクト", "期日", "時刻", "完了", "スター", "担当者", "ステータス", "繰り返し", "カラー", "メモ", "作成日時", "更新日時"];
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = tasks.map((t) => {
+      const proj = projects.find((p) => p.id === t.project)?.label ?? "";
+      const owner = people.find((p) => p.id === t.owner)?.name?.replace("（自分）", "") ?? "";
+      return [
+        t.id,
+        t.title,
+        proj,
+        t.due,
+        t.dueTime ?? "",
+        t.done ? "1" : "0",
+        t.starred ? "1" : "0",
+        owner,
+        t.status ?? "",
+        t.repeat ?? "",
+        t.color ?? "",
+        (t.notes ?? "").replace(/\n/g, " "),
+        t.createdAt ? new Date(t.createdAt).toISOString() : "",
+        t.updatedAt ? new Date(t.updatedAt).toISOString() : "",
+      ].map(escape).join(",");
+    });
+    const csv = "﻿" + [headers.map(escape).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `taskflow_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `taskflow_tasks_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
   const [googleCalToken, setGoogleCalToken] = useState<string | null>(null);
   const [gmailToken, setGmailToken] = useState<string | null>(null);
+  const [slackConnected, setSlackConnected] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => {
     try {
       const s = localStorage.getItem('taskflow_settings');
@@ -703,16 +720,7 @@ export default function App() {
   const sortActiveTasks = (list: Task[]) => {
     if (listSort === "custom") return list;
     const copy = [...list];
-    if (listSort === "priority") {
-      const order: Record<string, number> = { high: 0, mid: 1, low: 2 };
-      copy.sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9));
-    } else if (listSort === "owner") {
-      copy.sort((a, b) => {
-        const an = people.find((p) => p.id === a.owner)?.name ?? "ｚ";
-        const bn = people.find((p) => p.id === b.owner)?.name ?? "ｚ";
-        return an.localeCompare(bn, "ja");
-      });
-    } else if (listSort === "project") {
+    if (listSort === "project") {
       copy.sort((a, b) => {
         const ap = projects.find((p) => p.id === a.project)?.label ?? "";
         const bp = projects.find((p) => p.id === b.project)?.label ?? "";
@@ -817,7 +825,6 @@ export default function App() {
       onHover={setHoveredId}
       onChangeProject={(id, projectId) => updateTask(id, { project: projectId })}
       onChangeOwner={(id, ownerId) => updateTask(id, { owner: ownerId })}
-      onChangePriority={(id, priority) => updateTask(id, { priority })}
       onChangeDue={(id, due, dueTime, repeat, repeatConfig) => updateTask(id, { due, dueTime, repeat, repeatConfig })}
       onAddPerson={addPerson}
       onAddProject={(label, color) => addProject(label, color, "📌")}
@@ -835,11 +842,9 @@ export default function App() {
   );
 
   const LIST_SORT_OPTIONS: { id: ListSort; label: string }[] = [
-    { id: "date",     label: "日付順" },
-    { id: "priority", label: "優先度順" },
-    { id: "owner",    label: "担当者順" },
-    { id: "project",  label: "プロジェクト順" },
-    { id: "custom",   label: "カスタム" },
+    { id: "date",    label: "日付順" },
+    { id: "project", label: "プロジェクト順" },
+    { id: "custom",  label: "カスタム" },
   ];
   const listSortControl = (
     <div className="relative">
@@ -890,8 +895,8 @@ export default function App() {
   const inlineAddButton = (_groupKey: string, defaultProject?: string) => (
     <QuickAddRow
       projects={projects}
-      defaultProject={defaultProject}
-      onAdd={(title, project, due) => addTask({ title, project, due, priority: "mid" })}
+      defaultProject={defaultProject ?? (view === "project" ? (selectedProject ?? undefined) : undefined)}
+      onAdd={(title, project, due) => addTask({ title, project, due })}
     />
   );
 
@@ -984,11 +989,11 @@ export default function App() {
                 </button>
               ))}
             </div>
-          ) : mainMode === "tasks" ? (
+          ) : mainMode === "tasks" && layout !== "calendar" ? (
             <span className="whitespace-nowrap text-base font-semibold text-slate-700">
               {periodLabel}
             </span>
-          ) : (
+          ) : mainMode === "tasks" ? null : (
             /* メモモード: タイトル + フィルタータブ */
             <div className="flex min-w-0 items-center gap-2">
               <span className="whitespace-nowrap text-base font-semibold text-slate-700">メモ</span>
@@ -1185,7 +1190,6 @@ export default function App() {
                 people={people}
                 onSelect={setSelectedId}
                 onChangeProject={(id, project) => updateTask(id, { project })}
-                onChangePriority={(id, priority) => updateTask(id, { priority })}
                 onUpdateTask={updateTask}
                 onAddPerson={addPerson}
                 onAddProject={(label, color) => addProject(label, color, "📌")}
@@ -1327,6 +1331,7 @@ export default function App() {
                 projects={projects}
                 people={people}
                 onAddPerson={addPerson}
+                onAddProject={(label, color) => addProject(label, color, "📌")}
                 onUpdate={(patch) => updateTask(selectedId!, patch)}
                 onClose={() => setSelectedId(null)}
                 onDelete={(id) => { deleteTask(id); setSelectedId(null); }}
@@ -1425,7 +1430,7 @@ export default function App() {
             accessToken={googleCalToken}
             onConnect={setGoogleCalToken}
             onDisconnect={() => setGoogleCalToken(null)}
-            onAddTask={(title, due) => addTask({ title, due, project: "work", priority: "mid" })}
+            onAddTask={(title, due) => addTask({ title, due, project: "work" })}
           />
           <GmailPanel
             accessToken={gmailToken}
@@ -1469,6 +1474,12 @@ export default function App() {
           googleCalConnected={!!googleCalToken}
           onGoogleCalConnect={setGoogleCalToken}
           onGoogleCalDisconnect={() => setGoogleCalToken(null)}
+          gmailConnected={!!gmailToken}
+          onGmailConnect={() => setGmailToken("mock_gmail_token")}
+          onGmailDisconnect={() => setGmailToken(null)}
+          slackConnected={slackConnected}
+          onSlackConnect={() => setSlackConnected(true)}
+          onSlackDisconnect={() => setSlackConnected(false)}
           userEmail={profile.email}
           onChangePassword={handleChangePassword}
           onExport={exportData}

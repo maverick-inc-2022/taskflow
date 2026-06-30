@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { people as staticPeople, projects, repeatLabels } from "../data";
-import type { Person, Priority, ProjectId, RepeatMode, Task } from "../types";
-import { priorityMeta } from "../ui";
+import type { Person, ProjectId, RepeatMode, Task } from "../types";
 import Modal from "./Modal";
 
 interface Props {
@@ -16,7 +15,6 @@ const KEEP = "__keep__";
 export default function BulkEditModal({ count, onApply, onClose, people: propPeople }: Props) {
   const people = propPeople ?? staticPeople;
   const [project, setProject] = useState<string>(KEEP);
-  const [priority, setPriority] = useState<string>(KEEP);
   const [owner, setOwner] = useState<string>(KEEP);
   const [repeat, setRepeat] = useState<string>(KEEP);
   const [changeDue, setChangeDue] = useState(false);
@@ -25,7 +23,6 @@ export default function BulkEditModal({ count, onApply, onClose, people: propPeo
   const apply = () => {
     const patch: Partial<Task> = {};
     if (project !== KEEP) patch.project = project as ProjectId;
-    if (priority !== KEEP) patch.priority = priority as Priority;
     if (owner !== KEEP) patch.owner = owner;
     if (repeat !== KEEP) patch.repeat = repeat as RepeatMode;
     if (changeDue && due) patch.due = due;

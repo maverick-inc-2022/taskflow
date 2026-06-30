@@ -1,17 +1,15 @@
 import { useState } from "react";
 import { AvatarDisplay } from "../avatarIcons";
 import { people as staticPeople, projects as staticProjects, taskColors } from "../data";
-import type { Person, Priority, Project, ProjectId, Task } from "../types";
-import { priorityMeta } from "../ui";
+import type { Person, Project, ProjectId, Task } from "../types";
 import {
   EditableTitle,
   EditableProject,
   EditableOwner,
   EditableDue,
-  EditablePriority,
 } from "./InlineEditors";
 
-type GroupBy = "project" | "priority" | "date" | "owner";
+type GroupBy = "project" | "date" | "owner";
 
 interface Col {
   id: string;
@@ -25,19 +23,12 @@ interface Props {
   today: string;
   onSelect: (id: string) => void;
   onChangeProject: (id: string, project: ProjectId) => void;
-  onChangePriority: (id: string, priority: Priority) => void;
   onUpdateTask?: (id: string, patch: Partial<Task>) => void;
   onAddPerson?: (name: string, avatar: string) => void;
   onAddProject?: (label: string, color: string) => void;
   projects?: Project[];
   people?: Person[];
 }
-
-const PRIORITY_COLS: { id: Priority; label: string; color: string }[] = [
-  { id: "high", label: "高", color: "bg-rose-500" },
-  { id: "mid",  label: "中", color: "bg-amber-400" },
-  { id: "low",  label: "低", color: "bg-emerald-500" },
-];
 
 // ── KanbanCard ────────────────────────────────────────────────────────────────
 
@@ -72,7 +63,6 @@ function KanbanCard({
   onAddPerson,
   onAddProject,
 }: CardProps) {
-  const pr = priorityMeta[t.priority];
   const owner = people.find((p) => p.id === t.owner);
   const stripe = t.color && t.color !== "none" ? taskColors[t.color]?.stripe : "";
 
@@ -200,7 +190,6 @@ export default function KanbanView({
   today,
   onSelect,
   onChangeProject,
-  onChangePriority,
   onUpdateTask,
   onAddPerson,
   onAddProject,
@@ -238,17 +227,15 @@ export default function KanbanView({
   };
 
   const cols: Col[] = (() => {
-    if (groupBy === "project")  return projects.map((p) => ({ id: p.id, label: p.label, color: p.color, tasks: tasks.filter((t) => t.project === p.id) }));
-    if (groupBy === "priority") return PRIORITY_COLS.map((pc) => ({ id: pc.id, label: pc.label, color: pc.color, tasks: tasks.filter((t) => t.priority === pc.id) }));
-    if (groupBy === "owner")    return buildOwnerCols();
+    if (groupBy === "project") return projects.map((p) => ({ id: p.id, label: p.label, color: p.color, tasks: tasks.filter((t) => t.project === p.id) }));
+    if (groupBy === "owner")   return buildOwnerCols();
     return buildDateCols(tasks, today);
   })();
 
   const handleDrop = (colId: string) => {
     if (!dragId) return;
-    if (groupBy === "project")  onChangeProject(dragId, colId as ProjectId);
-    if (groupBy === "priority") onChangePriority(dragId, colId as Priority);
-    if (groupBy === "owner")    onUpdateTask?.(dragId, { owner: colId === "__none__" ? undefined : colId });
+    if (groupBy === "project") onChangeProject(dragId, colId as ProjectId);
+    if (groupBy === "owner")   onUpdateTask?.(dragId, { owner: colId === "__none__" ? undefined : colId });
     setDragId(null);
     setOverCol(null);
   };
@@ -261,7 +248,6 @@ export default function KanbanView({
         <div className="flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-0.5">
           {([
             { id: "date"    as GroupBy, label: "日付" },
-            { id: "owner"   as GroupBy, label: "担当者" },
             { id: "project" as GroupBy, label: "プロジェクト" },
           ]).map((opt) => (
             <button

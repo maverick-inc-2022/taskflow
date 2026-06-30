@@ -74,9 +74,6 @@ export default function CalendarView({
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-base font-bold text-slate-800">
-        {year}年{month + 1}月
-      </h2>
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-slate-200">
         {weekdays.map((w) => (
           <div

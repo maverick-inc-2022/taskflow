@@ -23,6 +23,12 @@ interface Props {
   googleCalConnected?: boolean;
   onGoogleCalConnect?: (token: string) => void;
   onGoogleCalDisconnect?: () => void;
+  gmailConnected?: boolean;
+  onGmailConnect?: () => void;
+  onGmailDisconnect?: () => void;
+  slackConnected?: boolean;
+  onSlackConnect?: () => void;
+  onSlackDisconnect?: () => void;
   userEmail?: string;
   userPassword?: string;
   onChangePassword?: (current: string, next: string) => string | null;
@@ -73,7 +79,7 @@ function Row({
   );
 }
 
-export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
+export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, slackConnected, onSlackConnect, onSlackDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
   const googleLogin = useGoogleLogin({
@@ -327,26 +333,56 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
             </button>
           )}
         </div>
-        {/* Gmail — mock */}
-        {[
-          { icon: GmailIcon, label: "Gmail", desc: "スターを付けたメールをタスク候補として表示する", connected: true },
-          { icon: SlackIcon, label: "Slack", desc: "保存したメッセージをタスクとして連携する", connected: false },
-        ].map(({ icon: Icon, label, desc, connected }) => (
-          <div key={label} className="flex items-center justify-between gap-4 py-3">
-            <div className="flex items-center gap-3">
-              <Icon className="h-6 w-6 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-slate-700">{label}</p>
-                <p className="text-xs text-slate-400">{desc}</p>
-              </div>
+        {/* Gmail */}
+        <div className="flex items-center justify-between gap-4 py-3">
+          <div className="flex items-center gap-3">
+            <GmailIcon className="h-6 w-6 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-slate-700">Gmail</p>
+              <p className="text-xs text-slate-400">スターを付けたメールをタスク候補として表示する</p>
             </div>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              connected ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
-            }`}>
-              {connected ? "連携中" : "未連携"}
-            </span>
           </div>
-        ))}
+          {gmailConnected ? (
+            <button
+              onClick={onGmailDisconnect}
+              className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600 hover:bg-red-50 hover:text-red-500 transition"
+            >
+              連携中
+            </button>
+          ) : (
+            <button
+              onClick={onGmailConnect}
+              className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 transition"
+            >
+              連携する
+            </button>
+          )}
+        </div>
+        {/* Slack */}
+        <div className="flex items-center justify-between gap-4 py-3">
+          <div className="flex items-center gap-3">
+            <SlackIcon className="h-6 w-6 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-slate-700">Slack</p>
+              <p className="text-xs text-slate-400">保存したメッセージをタスクとして連携する</p>
+            </div>
+          </div>
+          {slackConnected ? (
+            <button
+              onClick={onSlackDisconnect}
+              className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600 hover:bg-red-50 hover:text-red-500 transition"
+            >
+              連携中
+            </button>
+          ) : (
+            <button
+              onClick={onSlackConnect}
+              className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 transition"
+            >
+              連携する
+            </button>
+          )}
+        </div>
       </div>
 
       {userEmail && (

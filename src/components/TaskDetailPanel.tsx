@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { repeatLabels, defaultProjects, people as defaultPeople } from "../data";
 import { memosToPlainText, applyPlainTextToMemos } from "../memoText";
-import type { NoteMemo, Person, Project, RepeatConfig, RepeatMode, Task } from "../types";
-import { dueLabel } from "../ui";
+import type { Person, Project, RepeatMode, Task } from "../types";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
 import { AvatarDisplay } from "../avatarIcons";
 import CustomRepeatModal from "./CustomRepeatModal";
@@ -13,6 +12,7 @@ interface Props {
   projects?: Project[];
   people?: Person[];
   onAddPerson?: (name: string, avatar: string) => void;
+  onAddProject?: (label: string, color: string) => void;
   onUpdate: (patch: Partial<Task>) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
@@ -55,7 +55,23 @@ function MemoIcon() {
     </svg>
   );
 }
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    </svg>
+  );
+}
 
+function fmtDate(ts?: number): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+const PROJECT_COLORS = [
+  "bg-blue-500","bg-violet-500","bg-rose-500","bg-amber-400","bg-emerald-500","bg-slate-400","bg-pink-500","bg-cyan-500",
+];
 
 export default function TaskDetailPanel({
   task,
@@ -63,6 +79,7 @@ export default function TaskDetailPanel({
   projects: propProjects,
   people: propPeople,
   onAddPerson,
+  onAddProject,
   onUpdate,
   onClose,
   onDelete,
@@ -71,51 +88,53 @@ export default function TaskDetailPanel({
 }: Props) {
   const projects = propProjects ?? defaultProjects;
   const people   = propPeople  ?? defaultPeople;
-  const project = projects.find((p) => p.id === task.project);
+  const project  = projects.find((p) => p.id === task.project);
+  const owner    = people.find((p) => p.id === task.owner);
 
   const [titleDraft, setTitleDraft] = useState(task.title);
-  const [memoText, setMemoText] = useState(() => memosToPlainText(task.memos));
-  const [newSub, setNewSub] = useState("");
-  const [dateEdit, setDateEdit] = useState(false);
-  const [timeDraft, setTimeDraft] = useState(task.dueTime ?? "");
-  const timeInputRef = useRef<HTMLInputElement>(null);
+  const [memoText, setMemoText]     = useState(() => memosToPlainText(task.memos));
+  const [newSub, setNewSub]         = useState("");
+  const [dateEdit, setDateEdit]     = useState(false);
+  const [timeDraft, setTimeDraft]   = useState(task.dueTime ?? "");
+  const timeInputRef                = useRef<HTMLInputElement>(null);
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
-  const [repeatConfig, setRepeatConfig] = useState(task.repeatConfig ?? { interval: 1, unit: "week" as const, daysOfWeek: [], endType: "none" as const });
-  const [ownerOpen, setOwnerOpen] = useState(false);
-  const [newPersonName, setNewPersonName] = useState("");
-  const ownerRef = useRef<HTMLDivElement>(null);
-  const [richMemoOpen, setRichMemoOpen] = useState(false);
-  const richEditorRef = useRef<HTMLDivElement>(null);
+  const [ownerOpen, setOwnerOpen]   = useState(false);
+  const ownerRef                    = useRef<HTMLDivElement>(null);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const projectRef                    = useRef<HTMLDivElement>(null);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const subtasks = task.subtasks ?? [];
 
   useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
-
-  // ownerドロップダウンを外クリックで閉じる
-  useEffect(() => {
-    if (!ownerOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (ownerRef.current && !ownerRef.current.contains(e.target as Node)) {
-        setOwnerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [ownerOpen]);
   useEffect(() => { setMemoText(memosToPlainText(task.memos)); }, [task.id]);
   useEffect(() => { setTimeDraft(task.dueTime ?? ""); }, [task.id, task.dueTime]);
-  useEffect(() => {
-    if (richEditorRef.current) {
-      const html = task.memos?.[0]?.html ?? memoText.replace(/\n/g, "<br>");
-      richEditorRef.current.innerHTML = html;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, richMemoOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Close owner dropdown on outside click
+  useEffect(() => {
+    if (!ownerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ownerRef.current && !ownerRef.current.contains(e.target as Node)) setOwnerOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ownerOpen]);
+
+  useEffect(() => {
+    if (!projectOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (projectRef.current && !projectRef.current.contains(e.target as Node)) setProjectOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [projectOpen]);
 
   const commitTitle = () => {
     const t = titleDraft.trim();
@@ -124,59 +143,30 @@ export default function TaskDetailPanel({
   };
 
   const commitMemo = () => {
-    const newMemos = applyPlainTextToMemos(task.memos, memoText);
-    onUpdate({ memos: newMemos });
-  };
-
-  const commitRichMemo = () => {
-    if (!richEditorRef.current) return;
-    const html = richEditorRef.current.innerHTML ?? "";
-    const existing = task.memos ?? [];
-    const base = existing[0] ?? { id: "memo1", label: "メモ①", checklist: [], attachments: [] };
-    // Preserve any additional memos (メモ②, ③…) beyond the first.
-    const merged = existing.length > 0
-      ? existing.map((m, i) => (i === 0 ? { ...m, html } : m))
-      : [{ ...base, html }];
-    onUpdate({ memos: merged });
-  };
-
-  const richExec = (cmd: string, val?: string) => {
-    richEditorRef.current?.focus();
-    document.execCommand(cmd, false, val);
-  };
-
-  // Flush unsaved memo edits when the panel unmounts (e.g. switching tasks),
-  // since blur may not fire before React tears the component down.
-  const commitRichMemoRef = useRef(commitRichMemo);
-  commitRichMemoRef.current = commitRichMemo;
-  useEffect(() => {
-    return () => { commitRichMemoRef.current(); };
-  }, []);
-
-  // Open the native time picker safely (showPicker is unsupported on iOS Safari).
-  const openTimePicker = () => {
-    const el = timeInputRef.current;
-    if (!el) return;
-    if (typeof el.showPicker === "function") {
-      try { el.showPicker(); return; } catch { /* fall through to focus */ }
-    }
-    el.focus();
+    onUpdate({ memos: applyPlainTextToMemos(task.memos, memoText) });
   };
 
   const dueFmt = (() => {
     if (task.done && task.completedDate) return task.completedDate;
     if (!task.due) return "";
     const d = new Date(task.due + "T00:00:00");
-    const wd = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
-    return `${d.getMonth() + 1}/${d.getDate()} (${wd})`;
+    const wd = ["日","月","火","水","木","金","土"][d.getDay()];
+    return `${d.getMonth()+1}/${d.getDate()} (${wd})`;
   })();
+
+  const openTimePicker = () => {
+    const el = timeInputRef.current;
+    if (!el) return;
+    try { if (typeof el.showPicker === "function") { el.showPicker(); return; } } catch {}
+    el.focus();
+  };
 
   return (
     <section
       key={task.id}
       className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      {/* ── Close button ── */}
+      {/* ── Close ── */}
       <div className="flex justify-end px-3 pt-3 pb-0">
         <button onClick={onClose} aria-label="閉じる"
           className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -184,19 +174,15 @@ export default function TaskDetailPanel({
         </button>
       </div>
 
-      {/* ── Title row ── */}
+      {/* ── Title ── */}
       <div className="flex items-start gap-2 px-4 pb-4">
-        {/* circle checkbox */}
-        <button
-          onClick={() => onToggle(task.id)}
-          aria-label="完了"
+        <button onClick={() => onToggle(task.id)} aria-label="完了"
           className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition active:scale-90 ${
             task.done ? "border-slate-400 bg-slate-400 text-white" : "border-slate-400 hover:border-blue-500"
-          }`}
-        >
+          }`}>
           {task.done && (
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m20 6-11 11-5-5" />
+              <path d="m20 6-11 11-5-5"/>
             </svg>
           )}
         </button>
@@ -205,17 +191,11 @@ export default function TaskDetailPanel({
           value={titleDraft}
           onChange={(e) => setTitleDraft(e.target.value)}
           onBlur={commitTitle}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); commitTitle(); (e.target as HTMLTextAreaElement).blur(); }
-          }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitTitle(); (e.target as HTMLTextAreaElement).blur(); } }}
           rows={1}
           className="min-h-0 flex-1 resize-none border-0 bg-transparent text-base font-semibold leading-snug text-slate-800 outline-none placeholder:text-slate-300"
           style={{ fontSize: "16px" }}
-          onInput={(e) => {
-            const el = e.target as HTMLTextAreaElement;
-            el.style.height = "auto";
-            el.style.height = el.scrollHeight + "px";
-          }}
+          onInput={(e) => { const el = e.target as HTMLTextAreaElement; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }}
           placeholder="タイトルを追加"
         />
 
@@ -228,189 +208,199 @@ export default function TaskDetailPanel({
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto border-t border-slate-100">
 
-        {/* 日付 + 時間 + 繰り返し（1行） */}
+        {/* 日付 */}
         <div className="border-b border-slate-100">
-          <div className="flex items-center gap-2 px-4 py-3.5">
+          <div className="flex items-center gap-3 px-4 py-3.5">
             <button onClick={() => setDateEdit((v) => !v)} className="shrink-0 text-slate-400 hover:text-blue-500 transition">
               <CalIcon />
             </button>
             <span
-              className={`cursor-pointer text-sm ${task.due ? "text-slate-700" : "text-slate-400"} hover:underline`}
+              className={`flex-1 cursor-pointer text-sm ${task.due ? "text-slate-700" : "text-slate-400"} hover:text-blue-600`}
               onClick={() => setDateEdit((v) => !v)}
             >
               {task.due ? dueFmt : "日付を追加"}
             </span>
-            {task.due && (
-              <>
-                <button onClick={openTimePicker} className="ml-1 shrink-0 text-slate-400 hover:text-blue-500 transition">
-                  <ClockIcon />
-                </button>
-                <input
-                  ref={timeInputRef}
-                  type="time"
-                  value={timeDraft}
-                  onChange={(e) => setTimeDraft(e.target.value)}
-                  onBlur={(e) => onUpdate({ dueTime: e.target.value || undefined })}
-                  className="w-20 border-0 bg-transparent text-sm text-slate-700 outline-none"
-                  style={{ colorScheme: "light" }}
-                />
-              </>
-            )}
-            <div className="mx-1 h-3.5 w-px shrink-0 bg-slate-200" />
-            <RepIcon />
-            <select
-              value={task.repeat ?? "none"}
-              onChange={(e) => {
-                const val = e.target.value as RepeatMode;
-                if (val === "custom") { setShowCustomRepeat(true); }
-                else { onUpdate({ repeat: val }); }
-              }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
-            >
-              {(Object.keys(repeatLabels) as RepeatMode[]).map((r) => (
-                <option key={r} value={r}>{repeatLabels[r]}</option>
-              ))}
-            </select>
             {task.due && !task.done && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onUpdate({ due: "", dueTime: undefined }); }}
-                className="shrink-0 text-slate-300 hover:text-slate-500"
-              >
+              <button onClick={() => { onUpdate({ due: "", dueTime: undefined }); setDateEdit(false); }}
+                className="shrink-0 text-slate-300 hover:text-slate-500">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
           {dateEdit && (
             <div className="px-4 pb-3 bg-slate-50">
-              <input
-                type="date"
-                value={task.due}
+              <input type="date" value={task.due}
                 onChange={(e) => { onUpdate({ due: e.target.value }); setDateEdit(false); }}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
-                autoFocus
-              />
+                autoFocus />
             </div>
           )}
+        </div>
+
+        {/* 時間 */}
+        {task.due && (
+          <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+            <button onClick={openTimePicker} className="shrink-0 text-slate-400 hover:text-blue-500 transition">
+              <ClockIcon />
+            </button>
+            <input
+              ref={timeInputRef}
+              type="time"
+              value={timeDraft}
+              onChange={(e) => setTimeDraft(e.target.value)}
+              onBlur={(e) => onUpdate({ dueTime: e.target.value || undefined })}
+              placeholder="時間を追加"
+              className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              style={{ colorScheme: "light" }}
+            />
+            {timeDraft && (
+              <button onClick={() => { setTimeDraft(""); onUpdate({ dueTime: undefined }); }}
+                className="shrink-0 text-slate-300 hover:text-slate-500">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 繰り返し */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+          <RepIcon />
+          <select
+            value={task.repeat ?? "none"}
+            onChange={(e) => {
+              const val = e.target.value as RepeatMode;
+              if (val === "custom") setShowCustomRepeat(true);
+              else onUpdate({ repeat: val });
+            }}
+            className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
+          >
+            {(Object.keys(repeatLabels) as RepeatMode[]).map((r) => (
+              <option key={r} value={r}>{repeatLabels[r]}</option>
+            ))}
+          </select>
         </div>
         {showCustomRepeat && (
           <CustomRepeatModal
             due={task.due}
             repeat={task.repeat ?? "none"}
-            repeatConfig={repeatConfig}
-            onChange={(r, cfg) => {
-              const nextCfg = cfg ?? repeatConfig;
-              setRepeatConfig(nextCfg);
-              onUpdate({ repeat: r, repeatConfig: nextCfg });
-            }}
+            repeatConfig={task.repeatConfig ?? { interval: 1, unit: "week", daysOfWeek: [], endType: "none" }}
+            onChange={(r, cfg) => { onUpdate({ repeat: r, repeatConfig: cfg }); }}
             onClose={() => setShowCustomRepeat(false)}
           />
         )}
 
-        {/* プロジェクト + タスク所有者（横並び） */}
-        <div className="relative border-b border-slate-100" ref={ownerRef}>
-          <div className="flex items-center px-4 py-3.5">
-            {/* プロジェクト */}
+        {/* プロジェクト */}
+        <div className="relative border-b border-slate-100" ref={projectRef}>
+          <div
+            className="flex cursor-pointer items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition"
+            onClick={() => setProjectOpen((v) => !v)}
+          >
             <FolderIcon />
-            <select
-              value={task.project ?? ""}
-              onChange={(e) => onUpdate({ project: e.target.value })}
-              className="ml-2 min-w-0 flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="">プロジェクトなし</option>
+            {project ? (
+              <span className="flex flex-1 items-center gap-2 text-sm text-slate-700">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${project.color}`} />
+                {project.label}
+              </span>
+            ) : (
+              <span className="flex-1 text-sm text-slate-400">プロジェクトなし</span>
+            )}
+          </div>
+          {projectOpen && (
+            <div className="absolute left-0 right-0 z-20 border border-slate-200 bg-white shadow-lg rounded-xl overflow-hidden mx-2">
+              <button
+                onClick={() => { onUpdate({ project: "" }); setProjectOpen(false); }}
+                className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-slate-50 ${!task.project ? "text-blue-600 font-medium" : "text-slate-500"}`}
+              >
+                プロジェクトなし
+                {!task.project && <span className="ml-auto text-blue-500">✓</span>}
+              </button>
               {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
+                <button key={p.id}
+                  onClick={() => { onUpdate({ project: p.id }); setProjectOpen(false); }}
+                  className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-slate-50 ${task.project === p.id ? "text-blue-600 font-medium" : "text-slate-700"}`}>
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${p.color}`} />
+                  {p.label}
+                  {task.project === p.id && <span className="ml-auto text-blue-500">✓</span>}
+                </button>
               ))}
-            </select>
-            {project && <span className={`mx-1 h-2.5 w-2.5 shrink-0 rounded-full ${project.color}`} />}
-
-            {/* セパレータ */}
-            <div className="mx-2 h-3.5 w-px shrink-0 bg-slate-200" />
-
-            {/* タスク所有者 */}
-            <div
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-100 transition"
-              onClick={() => setOwnerOpen((v) => !v)}
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-              </svg>
-              {task.owner ? (() => {
-                const p = people.find((x) => x.id === task.owner);
-                return p ? (
-                  <span className="flex items-center gap-1.5 text-sm text-slate-700">
-                    <AvatarDisplay avatar={p.avatar} name={p.name} size={18} />
-                    <span className="max-w-[80px] truncate">{p.name.replace("（自分）", "")}</span>
-                  </span>
-                ) : <span className="text-sm text-slate-400">未設定</span>;
-              })() : (
-                <span className="text-sm text-slate-400">未設定</span>
+              {onAddProject && (
+                <div className="border-t border-slate-100 px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {PROJECT_COLORS.map((c) => (
+                      <button key={c} onClick={() => setNewProjectColor(c)}
+                        className={`h-4 w-4 shrink-0 rounded-full ${c} ${newProjectColor === c ? "ring-2 ring-offset-1 ring-blue-400" : ""}`} />
+                    ))}
+                  </div>
+                  <input
+                    placeholder="プロジェクト名を入力して Enter"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-400"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = newProjectName.trim();
+                        if (v) { onAddProject(v, newProjectColor); setNewProjectName(""); setProjectOpen(false); }
+                      }
+                    }}
+                  />
+                </div>
               )}
-              <svg viewBox="0 0 24 24" className="h-3 w-3 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m6 9 6 6 6-6"/>
-              </svg>
             </div>
+          )}
+        </div>
+
+        {/* 担当者（設定済みのみ表示） */}
+        <div className="relative border-b border-slate-100" ref={ownerRef}>
+          <div
+            className="flex cursor-pointer items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition"
+            onClick={() => setOwnerOpen((v) => !v)}
+          >
+            <PersonIcon />
+            {owner ? (
+              <span className="flex flex-1 items-center gap-2 text-sm text-slate-700">
+                <AvatarDisplay avatar={owner.avatar} name={owner.name} size={18} />
+                {owner.name.replace("（自分）", "")}
+              </span>
+            ) : (
+              <span className="flex-1 text-sm text-slate-400">担当者を追加</span>
+            )}
+            {owner && (
+              <button onClick={(e) => { e.stopPropagation(); onUpdate({ owner: undefined }); }}
+                className="shrink-0 text-slate-300 hover:text-slate-500">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {ownerOpen && (
-            <div className="absolute right-0 z-20 w-52 border border-slate-200 bg-white shadow-lg rounded-xl overflow-hidden">
-              {(() => {
-                const me = people.find((p) => p.id === "me");
-                return me ? (
-                  <button
-                    onClick={() => { onUpdate({ owner: "me" }); setOwnerOpen(false); }}
-                    className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-blue-50 ${task.owner === "me" ? "bg-blue-50 text-blue-600" : "text-slate-700"}`}
-                  >
-                    <AvatarDisplay avatar={me.avatar} name={me.name} size={22} />
-                    <span>自分</span>
-                    {task.owner === "me" && <span className="ml-auto text-blue-500">✓</span>}
-                  </button>
-                ) : null;
-              })()}
-              {people.filter((p) => p.id !== "me").map((p) => (
-                <button
-                  key={p.id}
+            <div className="absolute left-0 right-0 z-20 border border-slate-200 bg-white shadow-lg rounded-xl overflow-hidden mx-2">
+              {people.map((p) => (
+                <button key={p.id}
                   onClick={() => { onUpdate({ owner: p.id }); setOwnerOpen(false); }}
-                  className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-slate-50 ${task.owner === p.id ? "bg-blue-50 text-blue-600" : "text-slate-700"}`}
-                >
-                  <AvatarDisplay avatar={p.avatar} name={p.name} size={22} />
-                  <span>{p.name}</span>
+                  className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition hover:bg-slate-50 ${task.owner === p.id ? "text-blue-600 font-medium" : "text-slate-700"}`}>
+                  <AvatarDisplay avatar={p.avatar} name={p.name} size={20} />
+                  {p.name.replace("（自分）", "")}
                   {task.owner === p.id && <span className="ml-auto text-blue-500">✓</span>}
                 </button>
               ))}
               {task.owner && (
-                <button
-                  onClick={() => { onUpdate({ owner: undefined }); setOwnerOpen(false); }}
-                  className="flex w-full items-center gap-2.5 border-t border-slate-100 px-4 py-2.5 text-sm text-slate-400 transition hover:bg-slate-50"
-                >
-                  <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-slate-300 text-xs">×</span>
-                  解除
+                <button onClick={() => { onUpdate({ owner: undefined }); setOwnerOpen(false); }}
+                  className="flex w-full items-center gap-2 border-t border-slate-100 px-4 py-2.5 text-sm text-slate-400 hover:bg-slate-50">
+                  <XIcon className="h-3.5 w-3.5" /> 担当者を解除
                 </button>
               )}
               {onAddPerson && (
                 <div className="border-t border-slate-100 px-3 py-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={newPersonName}
-                      onChange={(e) => setNewPersonName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newPersonName.trim()) {
-                          onAddPerson(newPersonName.trim(), "icon:male-adult:#64748b");
-                          setNewPersonName("");
-                        }
-                      }}
-                      placeholder="名前を入力して Enter"
-                      className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-400"
-                    />
-                    <button
-                      onClick={() => {
-                        if (newPersonName.trim()) {
-                          onAddPerson(newPersonName.trim(), "icon:male-adult:#64748b");
-                          setNewPersonName("");
-                        }
-                      }}
-                      className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                    >＋</button>
-                  </div>
+                  <input
+                    placeholder="名前を入力して Enter"
+                    className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-400"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = (e.target as HTMLInputElement).value.trim();
+                        if (v) { onAddPerson(v, "icon:male-adult:#64748b"); (e.target as HTMLInputElement).value = ""; }
+                      }
+                    }}
+                  />
                 </div>
               )}
             </div>
@@ -418,64 +408,16 @@ export default function TaskDetailPanel({
         </div>
 
         {/* メモ */}
-        <div className="border-b border-slate-100">
-          {/* ツールバー（隠れてる、ボタンで表示） */}
-          {richMemoOpen && (
-            <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-100 bg-slate-50 px-2 py-1">
-              <select
-                onMouseDown={(e) => e.stopPropagation()}
-                onChange={(e) => { richEditorRef.current?.focus(); document.execCommand("formatBlock", false, e.target.value); }}
-                className="rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px] text-slate-600"
-              >
-                <option value="p">本文</option>
-                <option value="h3">見出し</option>
-                <option value="blockquote">引用</option>
-              </select>
-              <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("insertUnorderedList"); }}
-                className="flex h-6 min-w-[24px] items-center justify-center rounded px-1 text-[11px] font-bold text-slate-600 hover:bg-white transition">•≡</button>
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("insertOrderedList"); }}
-                className="flex h-6 min-w-[24px] items-center justify-center rounded px-1 text-[11px] font-bold text-slate-600 hover:bg-white transition">1.</button>
-              <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("bold"); }}
-                className="flex h-6 w-6 items-center justify-center rounded text-xs font-bold text-slate-600 hover:bg-white transition"><b>B</b></button>
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("underline"); }}
-                className="flex h-6 w-6 items-center justify-center rounded text-xs text-slate-600 hover:bg-white transition"><u>U</u></button>
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("italic"); }}
-                className="flex h-6 w-6 items-center justify-center rounded text-xs italic text-slate-600 hover:bg-white transition">I</button>
-              <div className="mx-0.5 h-3.5 w-px bg-slate-300/70" />
-              {["#ef4444","#f97316","#22c55e","#3b82f6","#8b5cf6"].map((c) => (
-                <button key={c} onMouseDown={(e) => { e.preventDefault(); richExec("foreColor", c); }}
-                  className="h-4 w-4 rounded-full border border-white shadow-sm transition hover:scale-110"
-                  style={{ background: c }} />
-              ))}
-              <button onMouseDown={(e) => { e.preventDefault(); richExec("removeFormat"); }}
-                title="色をリセット"
-                className="h-4 w-4 rounded-full border border-slate-300 bg-slate-700 transition hover:scale-110" />
-            </div>
-          )}
-          {/* エディタ本体（常に表示） */}
-          <div className="flex items-start gap-3 px-4 pt-3.5" style={{ paddingBottom: "0.2rem" }}>
-            <MemoIcon />
-            <div className="flex-1" />
-            <button
-              onClick={() => setRichMemoOpen((v) => !v)}
-              title={richMemoOpen ? "書式ツールバーを閉じる" : "書式を設定"}
-              className={`shrink-0 rounded-md p-1 transition ${richMemoOpen ? "bg-blue-100 text-blue-600" : "text-slate-300 hover:bg-slate-100 hover:text-slate-500"}`}
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>
-              </svg>
-            </button>
-          </div>
-          <div
-            ref={richEditorRef}
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={commitRichMemo}
-            data-placeholder="メモを追加"
-            className="note-editor min-h-[14rem] w-full px-4 py-2 pb-4 text-sm text-slate-700 outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500"
-            style={{ lineHeight: "1.7" }}
+        <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-3.5">
+          <MemoIcon />
+          <textarea
+            value={memoText}
+            onChange={(e) => setMemoText(e.target.value)}
+            onBlur={commitMemo}
+            placeholder="メモを追加"
+            rows={3}
+            className="min-h-[4rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            style={{ fontSize: "14px", lineHeight: "1.7" }}
           />
         </div>
 
@@ -483,7 +425,6 @@ export default function TaskDetailPanel({
         <div className="px-4 py-3">
           <p className="mb-2 text-xs font-semibold text-slate-500">サブタスク</p>
 
-          {/* Subtask list */}
           <div className="space-y-0.5">
             {subtasks.map((s) => (
               <div key={s.id} className="group flex items-center gap-2 rounded-lg py-1.5">
@@ -491,30 +432,26 @@ export default function TaskDetailPanel({
                   onClick={() => onUpdate({ subtasks: subtasks.map((x) => x.id === s.id ? { ...x, done: !x.done } : x) })}
                   className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition ${
                     s.done ? "border-slate-400 bg-slate-400 text-white" : "border-slate-400 hover:border-blue-500"
-                  }`}
-                >
+                  }`}>
                   {s.done && (
                     <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m20 6-11 11-5-5" />
+                      <path d="m20 6-11 11-5-5"/>
                     </svg>
                   )}
                 </button>
                 <span className={`flex-1 text-sm ${s.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{s.title}</span>
-                <button
-                  onClick={() => onUpdate({ subtasks: subtasks.filter((x) => x.id !== s.id) })}
-                  className="shrink-0 text-slate-300 opacity-0 transition hover:text-slate-500 group-hover:opacity-100"
-                >
+                <button onClick={() => onUpdate({ subtasks: subtasks.filter((x) => x.id !== s.id) })}
+                  className="shrink-0 text-slate-300 opacity-0 transition hover:text-slate-500 group-hover:opacity-100">
                   <XIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
           </div>
 
-          {/* Add subtask row — below the list */}
           <div className="mt-1 flex items-center gap-2 py-1.5">
             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-400">
               <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
+                <path d="M12 5v14M5 12h14"/>
               </svg>
             </span>
             <input
@@ -522,38 +459,54 @@ export default function TaskDetailPanel({
               onChange={(e) => setNewSub(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newSub.trim()) {
-                  const id = `sub${Date.now()}`;
-                  onUpdate({ subtasks: [...subtasks, { id, title: newSub.trim(), done: false }] });
+                  onUpdate({ subtasks: [...subtasks, { id: `sub${Date.now()}`, title: newSub.trim(), done: false }] });
                   setNewSub("");
                 }
               }}
-              placeholder="タスクを追加"
+              placeholder="サブタスクを追加"
               className="flex-1 border-0 bg-transparent text-sm text-slate-500 outline-none placeholder:text-slate-400"
               style={{ fontSize: "14px" }}
             />
           </div>
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div className="border-t border-slate-100 px-4 py-4">
-          {/* 作成日・更新日 */}
-          <div className="mb-4 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>作成日</span>
-              <span>{task.createdAt ? new Date(task.createdAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+          {(task.createdAt || task.updatedAt) && (
+            <div className="mb-4 space-y-1 rounded-xl bg-slate-50 px-3 py-2.5">
+              {task.createdAt && (
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>作成日</span><span>{fmtDate(task.createdAt)}</span>
+                </div>
+              )}
+              {task.updatedAt && (
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>更新日</span><span>{fmtDate(task.updatedAt)}</span>
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>更新日</span>
-              <span>{task.updatedAt ? new Date(task.updatedAt).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+          )}
+          {deleteConfirm ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center">
+              <p className="mb-3 text-sm font-medium text-red-700">本当に削除しますか？</p>
+              <div className="flex gap-2">
+                <button onClick={() => setDeleteConfirm(false)}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                  キャンセル
+                </button>
+                <button onClick={() => onDelete(task.id)}
+                  className="flex-1 rounded-lg bg-red-500 py-2 text-sm font-semibold text-white hover:bg-red-600">
+                  削除
+                </button>
+              </div>
             </div>
-          </div>
-          <button
-            onClick={() => onDelete(task.id)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
-          >
-            <TrashIcon className="h-4 w-4" />
-            タスクを削除
-          </button>
+          ) : (
+            <button onClick={() => setDeleteConfirm(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-red-500 transition hover:bg-red-50">
+              <TrashIcon className="h-4 w-4" />
+              タスクを削除
+            </button>
+          )}
         </div>
       </div>
     </section>

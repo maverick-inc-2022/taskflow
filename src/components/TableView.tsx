@@ -2,17 +2,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { AvatarDisplay } from "../avatarIcons";
 import { createPortal } from "react-dom";
 import { people as staticPeople, projects as staticProjects, taskColors } from "../data";
-import type { Person, Priority, Project, RepeatConfig, RepeatMode, Task } from "../types";
-import { dueLabel, priorityMeta } from "../ui";
+import type { Person, Project, RepeatConfig, RepeatMode, Task } from "../types";
+import { dueLabel } from "../ui";
 import {
   EditableTitle,
   EditableProject,
   EditableOwner,
   EditableDue,
-  EditablePriority,
 } from "./InlineEditors";
 
-type ColKey = "project" | "title" | "owner" | "due" | "priority";
+type ColKey = "project" | "title" | "owner" | "due";
 
 interface Props {
   tasks: Task[];
@@ -26,8 +25,6 @@ interface Props {
   people?: Person[];
   showRepeatCol?: boolean;
 }
-
-const PRIORITY_ORDER: Record<string, number> = { high: 0, mid: 1, low: 2 };
 
 const DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -69,7 +66,6 @@ function getTaskValue(t: Task, col: ColKey, projects: Project[], people: Person[
     case "project":  return projects.find((p) => p.id === t.project)?.label ?? "";
     case "owner":    return people.find((p) => p.id === t.owner)?.name ?? "￿";
     case "due":      return showRepeat ? repeatLabel(t.repeat, t.repeatConfig) : t.due + (t.dueTime ?? "");
-    case "priority": return String(PRIORITY_ORDER[t.priority] ?? 9);
   }
 }
 
@@ -79,7 +75,6 @@ function getFilterLabel(t: Task, col: ColKey, projects: Project[], people: Perso
     case "project":  return projects.find((p) => p.id === t.project)?.label ?? "なし";
     case "owner":    return people.find((p) => p.id === t.owner)?.name?.replace("（自分）", "") ?? "未割当";
     case "due":      return showRepeat ? repeatLabel(t.repeat, t.repeatConfig) : (t.done && t.completedDate ? `完了 ${t.completedDate}` : dueLabel(t.due, today) || t.due);
-    case "priority": return priorityMeta[t.priority]?.label ?? t.priority;
   }
 }
 
@@ -198,10 +193,10 @@ export default function TableView({
   const dueColLabel = showRepeatCol ? "繰り返し" : "期日";
 
   const columns: { key: ColKey; label: string; width?: string }[] = [
-    { key: "project",  label: "プロジェクト名", width: "w-32" },
+    { key: "project",  label: "プロジェクト", width: "w-36" },
     { key: "title",    label: "タスク名" },
-    { key: "owner",    label: "担当者",         width: "w-40" },
-    { key: "due",      label: dueColLabel,      width: "w-36" },
+    { key: "owner",    label: "担当者",       width: "w-40" },
+    { key: "due",      label: dueColLabel,    width: "w-36" },
   ];
 
   const activeFilterCount = Object.values(filters).filter((v) => v && v.length > 0).length;
