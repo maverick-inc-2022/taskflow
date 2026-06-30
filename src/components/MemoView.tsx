@@ -281,6 +281,7 @@ function MemoCard({
   const [showColorPicker,    setShowColorPicker]    = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [copied,             setCopied]             = useState(false);
+  const [confirmDelete,      setConfirmDelete]      = useState(false);
   const [linkPreview, setLinkPreview] = useState<{ href: string; x: number; y: number } | null>(null);
 
   const category = categories.find(cat => cat.id === memo.categoryId);
@@ -509,9 +510,17 @@ function MemoCard({
           <button onClick={e => { e.stopPropagation(); onDuplicate(); }} title="複製" className="rounded p-1 hover:bg-white/20">
             <DuplicateIcon />
           </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} title="削除" className="rounded p-1 hover:bg-white/20 hover:text-red-300">
+          {confirmDelete ? (
+            <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+              <span className="text-[10px] opacity-80">削除？</span>
+              <button onClick={onDelete} className="rounded px-1.5 py-0.5 text-[10px] font-semibold hover:bg-white/20">はい</button>
+              <button onClick={() => setConfirmDelete(false)} className="rounded px-1.5 py-0.5 text-[10px] opacity-70 hover:bg-white/20">いいえ</button>
+            </div>
+          ) : (
+          <button onClick={e => { e.stopPropagation(); setConfirmDelete(true); }} title="削除" className="rounded p-1 hover:bg-white/20 hover:text-red-300">
             <TrashIcon />
           </button>
+          )}
         </div>
       </div>
 
