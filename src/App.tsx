@@ -1165,17 +1165,6 @@ export default function App() {
                     </h3>
                     {listSortControl}
                   </div>
-                  {/* column header — desktop only */}
-                  <div className="hidden sm:flex mb-1 items-center gap-3 border-b border-slate-100 px-3 pb-1.5 text-sm font-medium text-slate-400">
-                    <span className="hidden sm:inline-block h-4 w-4 shrink-0" />
-                    <span className="h-5 w-5 shrink-0" />
-                    <span className="hidden sm:block w-28 shrink-0">プロジェクト名</span>
-                    <span className="sm:hidden w-3 shrink-0" />{/* dot placeholder */}
-                    <span className="flex-1">タスク名</span>
-                    <span className="hidden sm:block w-20 shrink-0 text-center">担当者</span>
-                    <span className="hidden sm:block w-52 shrink-0 text-right">期日</span>
-                    <span className="w-12 sm:w-20 shrink-0 text-center">優先度</span>
-                  </div>
                   <div className="space-y-0.5">{renderList(todayActive)}</div>
                   {inlineAddButton("today")}
                 </section>
