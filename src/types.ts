@@ -1,5 +1,7 @@
 export type Priority = "high" | "mid" | "low";
 
+export type TaskStatus = "not_started" | "in_progress" | "in_review" | "done";
+
 export type ProjectId = string;
 
 export interface Task {
@@ -32,6 +34,8 @@ export interface Task {
   attachments?: Attachment[];
   /** Rich-text memo sections */
   memos?: NoteMemo[];
+  /** Workflow status */
+  status?: TaskStatus;
 }
 
 export type TaskColor =

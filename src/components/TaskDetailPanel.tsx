@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { repeatLabels, defaultProjects } from "../data";
 import { memosToPlainText, applyPlainTextToMemos } from "../memoText";
-import type { NoteMemo, Project, RepeatMode, Task } from "../types";
+import type { NoteMemo, Project, RepeatMode, Task, TaskStatus } from "../types";
 import { dueLabel } from "../ui";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
+
+const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
+  { value: "not_started", label: "未着手",   color: "text-slate-400" },
+  { value: "in_progress", label: "進行中",   color: "text-blue-500"  },
+  { value: "in_review",   label: "レビュー中", color: "text-amber-500" },
+  { value: "done",        label: "完了",     color: "text-emerald-500" },
+];
 
 interface Props {
   task: Task;
@@ -92,7 +99,7 @@ export default function TaskDetailPanel({
     onUpdate({ memos: newMemos });
   };
 
-  const dueFmt = task.done && task.completedDate ? `完了 ${task.completedDate}` : dueLabel(task.due, today);
+  const dueFmt = task.done && task.completedDate ? task.completedDate : dueLabel(task.due, today);
 
   return (
     <section
@@ -151,47 +158,48 @@ export default function TaskDetailPanel({
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto border-t border-slate-100">
 
-        {/* 日付 */}
-        <div
-          className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3.5 hover:bg-slate-50"
-          onClick={() => setDateEdit((v) => !v)}
-        >
-          <CalIcon />
-          <span className={`flex-1 text-sm ${task.due ? "text-slate-700" : "text-slate-400"}`}>
-            {task.due ? dueFmt : "日付を追加"}
-          </span>
-          {task.due && !task.done && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onUpdate({ due: "" }); }}
-              className="shrink-0 text-slate-300 hover:text-slate-500"
+        {/* 日付 + 時間（横並び） */}
+        <div className="border-b border-slate-100">
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <CalIcon />
+            <span
+              className={`cursor-pointer text-sm ${task.due ? "text-slate-700" : "text-slate-400"} hover:underline`}
+              onClick={() => setDateEdit((v) => !v)}
             >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        {dateEdit && (
-          <div className="border-b border-slate-100 px-4 py-3 bg-slate-50">
-            <input
-              type="date"
-              value={task.due}
-              onChange={(e) => { onUpdate({ due: e.target.value }); setDateEdit(false); }}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
-              autoFocus
-            />
+              {task.due ? dueFmt : "日付を追加"}
+            </span>
+            {task.due && (
+              <>
+                <ClockIcon />
+                <input
+                  type="time"
+                  value={task.dueTime ?? ""}
+                  onChange={(e) => onUpdate({ dueTime: e.target.value || undefined })}
+                  className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none"
+                  style={{ colorScheme: "light" }}
+                />
+              </>
+            )}
+            {task.due && !task.done && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUpdate({ due: "" }); }}
+                className="ml-auto shrink-0 text-slate-300 hover:text-slate-500"
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
-        )}
-
-        {/* 時間 */}
-        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-          <ClockIcon />
-          <input
-            type="time"
-            value={task.dueTime ?? ""}
-            onChange={(e) => onUpdate({ dueTime: e.target.value || undefined })}
-            className="flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-            placeholder="時間を追加"
-            style={{ colorScheme: "light" }}
-          />
+          {dateEdit && (
+            <div className="px-4 pb-3 bg-slate-50">
+              <input
+                type="date"
+                value={task.due}
+                onChange={(e) => { onUpdate({ due: e.target.value }); setDateEdit(false); }}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+                autoFocus
+              />
+            </div>
+          )}
         </div>
 
         {/* 繰り返し */}
@@ -226,6 +234,24 @@ export default function TaskDetailPanel({
           )}
         </div>
 
+        {/* ステータス */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/>
+          </svg>
+          <select
+            value={task.status ?? "not_started"}
+            onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
+            className={`flex-1 border-0 bg-transparent text-sm outline-none cursor-pointer ${
+              STATUS_OPTIONS.find(s => s.value === (task.status ?? "not_started"))?.color ?? "text-slate-400"
+            }`}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+
         {/* メモ */}
         <div className="flex items-start gap-3 border-b border-slate-100 px-4 py-3.5">
           <MemoIcon />
@@ -234,8 +260,8 @@ export default function TaskDetailPanel({
             onChange={(e) => setMemoText(e.target.value)}
             onBlur={commitMemo}
             placeholder="メモを追加"
-            rows={3}
-            className="min-h-[4rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+            rows={5}
+            className="min-h-[7rem] flex-1 resize-none border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             style={{ fontSize: "14px", lineHeight: "1.6" }}
           />
         </div>
@@ -244,31 +270,8 @@ export default function TaskDetailPanel({
         <div className="px-4 py-3">
           <p className="mb-2 text-xs font-semibold text-slate-500">サブタスク</p>
 
-          {/* Add subtask row */}
-          <div className="flex items-center gap-2 py-1.5">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-400">
-              <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            <input
-              value={newSub}
-              onChange={(e) => setNewSub(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newSub.trim()) {
-                  const id = `sub${Date.now()}`;
-                  onUpdate({ subtasks: [...subtasks, { id, title: newSub.trim(), done: false }] });
-                  setNewSub("");
-                }
-              }}
-              placeholder="サブタスクを追加"
-              className="flex-1 border-0 bg-transparent text-sm text-slate-500 outline-none placeholder:text-slate-400"
-              style={{ fontSize: "14px" }}
-            />
-          </div>
-
           {/* Subtask list */}
-          <div className="mt-1 space-y-0.5">
+          <div className="space-y-0.5">
             {subtasks.map((s) => (
               <div key={s.id} className="group flex items-center gap-2 rounded-lg py-1.5">
                 <button
@@ -292,6 +295,29 @@ export default function TaskDetailPanel({
                 </button>
               </div>
             ))}
+          </div>
+
+          {/* Add subtask row — below the list */}
+          <div className="mt-1 flex items-center gap-2 py-1.5">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-400">
+              <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+            <input
+              value={newSub}
+              onChange={(e) => setNewSub(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newSub.trim()) {
+                  const id = `sub${Date.now()}`;
+                  onUpdate({ subtasks: [...subtasks, { id, title: newSub.trim(), done: false }] });
+                  setNewSub("");
+                }
+              }}
+              placeholder="タスクを追加"
+              className="flex-1 border-0 bg-transparent text-sm text-slate-500 outline-none placeholder:text-slate-400"
+              style={{ fontSize: "14px" }}
+            />
           </div>
         </div>
 
