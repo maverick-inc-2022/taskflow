@@ -13,16 +13,17 @@ interface Props {
   people: Person[];
   onAddPerson?: (name: string, avatar: string) => void;
   onAddProject?: (label: string, color: string) => void;
+  defaultRepeat?: RepeatMode;
 }
 
-export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPerson, onAddProject }: Props) {
+export default function AddTaskModal({ onClose, onAdd, projects, people, onAddPerson, onAddProject, defaultRepeat }: Props) {
   const [title, setTitle] = useState("");
   const [project, setProject] = useState<ProjectId>("");
   const [due, setDue] = useState(TODAY);
   const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState<Priority>("mid");
   const [owner, setOwner] = useState<string | undefined>(people.find((p) => p.id === "me")?.id);
-  const [repeat, setRepeat] = useState<RepeatMode>("none");
+  const [repeat, setRepeat] = useState<RepeatMode>(defaultRepeat ?? "none");
   const [repeatConfig, setRepeatConfig] = useState<RepeatConfig>({ interval: 1, unit: "week", daysOfWeek: [], endType: "none" });
   const [showCustomRepeat, setShowCustomRepeat] = useState(false);
 

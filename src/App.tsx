@@ -133,6 +133,7 @@ export default function App() {
     return "today";
   });
   const [showModal, setShowModal] = useState(false);
+  const [modalDefaultRepeat, setModalDefaultRepeat] = useState<import("./types").RepeatMode | undefined>(undefined);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1197,6 +1198,7 @@ export default function App() {
                 onAddProject={(label, color) => addProject(label, color, "📌")}
                 projects={projects}
                 people={people}
+                onAddTask={() => { setModalDefaultRepeat("weekly"); setShowModal(true); }}
               />
             ) : (
               <>
@@ -1321,12 +1323,13 @@ export default function App() {
 
       {showModal && (
         <AddTaskModal
-          onClose={() => setShowModal(false)}
+          onClose={() => { setShowModal(false); setModalDefaultRepeat(undefined); }}
           onAdd={addTask}
           projects={projects}
           people={people}
           onAddPerson={addPerson}
           onAddProject={(label, color) => addProject(label, color, "📌")}
+          defaultRepeat={modalDefaultRepeat}
         />
       )}
 

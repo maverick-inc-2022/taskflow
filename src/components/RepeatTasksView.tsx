@@ -15,6 +15,7 @@ interface Props {
   onAddProject?: (label: string, color: string) => void;
   projects?: Project[];
   people?: Person[];
+  onAddTask?: () => void;
 }
 
 function TrashIcon() {
@@ -50,6 +51,7 @@ export default function RepeatTasksView({
   onAddProject,
   projects: propProjects,
   people: propPeople,
+  onAddTask,
 }: Props) {
   const projects = propProjects ?? staticProjects;
   const people   = propPeople  ?? staticPeople;
@@ -126,12 +128,38 @@ export default function RepeatTasksView({
         </div>
 
         {tasks.length === 0 ? (
-          <div className="px-4 py-12 text-center text-sm text-slate-300">
-            繰り返し設定されたタスクはありません
+          <div className="flex flex-col items-center gap-3 px-4 py-12">
+            <p className="text-sm text-slate-300">繰り返し設定されたタスクはありません</p>
+            {onAddTask && (
+              <button
+                onClick={onAddTask}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                繰り返しタスクを追加
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-slate-50 px-1 py-1">
             {tasks.map(renderRow)}
+          </div>
+        )}
+
+        {/* Add button shown at the bottom when tasks exist */}
+        {tasks.length > 0 && onAddTask && (
+          <div className="border-t border-slate-100 px-3 py-2">
+            <button
+              onClick={onAddTask}
+              className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-50 hover:text-blue-600"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              タスクを追加
+            </button>
           </div>
         )}
       </section>
