@@ -535,7 +535,7 @@ function MemoCard({
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onClick={handleClick}
-          className="note-editor min-h-[80px] px-3 py-2 text-sm text-slate-700 outline-none"
+          className="note-editor min-h-[160px] px-3 py-3 text-sm text-slate-700 outline-none"
           data-placeholder="ここに入力..."
         />
 
@@ -622,7 +622,7 @@ export default function MemoView({
   const handleDragEnd = () => { setDragId(null); setDragOverId(null); setDragSection(null); };
 
   const renderSection = (list: StickyMemo[], section: "pinned" | "regular") => (
-    <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+    <div className="columns-1 gap-4 sm:columns-2 xl:columns-3">
       {list.map(memo => (
         <MemoCard
           key={memo.id}
