@@ -172,6 +172,8 @@ export default function App() {
     return "list";
   });
   const [calendarOffset, setCalendarOffset] = useState(0); // months offset for calendar nav
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
 
   // ── Main mode: tasks ↔ memos ──
   const [mainMode, setMainMode] = useState<"tasks" | "memos">("tasks");
@@ -389,6 +391,18 @@ export default function App() {
   };
   const handleNavNext = () => {
     if (layout === "calendar") setCalendarOffset((o) => o + 1);
+  };
+
+  const calendarBase = useMemo(() => {
+    const d = new Date(TODAY + "T00:00:00");
+    d.setMonth(d.getMonth() + calendarOffset);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }, [calendarOffset]);
+
+  const jumpToYearMonth = (year: number, month: number) => {
+    const d = new Date(TODAY + "T00:00:00");
+    setCalendarOffset((year - d.getFullYear()) * 12 + (month - (d.getMonth() + 1)));
+    setShowCalendarPicker(false);
   };
 
   const toggle = (id: string) => {
@@ -935,14 +949,55 @@ export default function App() {
 
           {/* Calendar navigation (< >) — only for calendar layout */}
           {mainMode === "tasks" && layout === "calendar" && (
-            <div className="flex items-center gap-1">
+            <div className="relative flex items-center gap-1">
               <button onClick={handleNavPrev} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="前月">
                 <ChevronLeftIcon className="h-4 w-4" />
               </button>
-              <span className="whitespace-nowrap text-sm font-medium text-slate-600">{periodLabel}</span>
+              <button
+                onClick={() => { setPickerYear(calendarBase.year); setShowCalendarPicker(v => !v); }}
+                className="whitespace-nowrap rounded-md px-2 py-1 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                title="年月を選択"
+              >
+                {periodLabel}
+              </button>
               <button onClick={handleNavNext} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="次月">
                 <ChevronRightIcon className="h-4 w-4" />
               </button>
+
+              {showCalendarPicker && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowCalendarPicker(false)} />
+                  <div className="absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={{ minWidth: 200 }}>
+                    {/* Year navigation */}
+                    <div className="mb-2 flex items-center justify-between">
+                      <button onClick={() => setPickerYear(y => y - 1)} className="rounded p-1 text-slate-500 hover:bg-slate-100">
+                        <ChevronLeftIcon className="h-4 w-4" />
+                      </button>
+                      <span className="text-sm font-semibold text-slate-700">{pickerYear}年</span>
+                      <button onClick={() => setPickerYear(y => y + 1)} className="rounded p-1 text-slate-500 hover:bg-slate-100">
+                        <ChevronRightIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Month grid */}
+                    <div className="grid grid-cols-4 gap-1">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                        const isActive = calendarBase.year === pickerYear && calendarBase.month === m;
+                        return (
+                          <button
+                            key={m}
+                            onClick={() => jumpToYearMonth(pickerYear, m)}
+                            className={`rounded-lg py-1.5 text-xs font-medium transition hover:bg-blue-50 hover:text-blue-600 ${
+                              isActive ? "bg-blue-100 font-semibold text-blue-700" : "text-slate-600"
+                            }`}
+                          >
+                            {m}月
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
