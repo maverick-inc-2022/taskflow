@@ -109,9 +109,10 @@ interface ToolbarProps {
   cardRef:   React.RefObject<HTMLDivElement | null>;
   borderClass: string;
   onInsertCheckLine: () => void;
+  onAttachFile: () => void;
 }
 
-function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine }: ToolbarProps) {
+function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine, onAttachFile }: ToolbarProps) {
   const [showColors, setShowColors] = useState(false);
   const [showLink,   setShowLink]   = useState(false);
   const [linkUrl,    setLinkUrl]    = useState("");
@@ -249,6 +250,14 @@ function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine }: Too
           </div>
         )}
       </div>
+
+      {sep}
+
+      {btn("ファイルを添付", onAttachFile,
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      )}
     </div>
   );
 }
@@ -275,9 +284,11 @@ function MemoCard({
   onUpdate, onDelete, onDuplicate,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }: CardProps) {
-  const cardRef   = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const cardRef      = useRef<HTMLDivElement>(null);
+  const editorRef    = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused,          setIsFocused]          = useState(false);
+  const [selectedImg,        setSelectedImg]        = useState<HTMLImageElement | null>(null);
   const [showColorPicker,    setShowColorPicker]    = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [copied,             setCopied]             = useState(false);
@@ -373,9 +384,73 @@ function MemoCard({
     onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
   }, [onUpdate]);
 
+  // Paste image from clipboard
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imgItem = items.find(it => it.type.startsWith("image/"));
+    if (!imgItem) return;
+    e.preventDefault();
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result as string;
+      const img = document.createElement("img");
+      img.src = dataUrl;
+      img.style.maxWidth = "100%";
+      img.style.width = "360px";
+      img.className = "memo-image";
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        range.setStartAfter(img);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorRef.current?.appendChild(img);
+      }
+      onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+    };
+    reader.readAsDataURL(file);
+  }, [onUpdate]);
+
+  // File attachment handler
+  const handleFileAttach = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach(file => {
+      const isImage = file.type.startsWith("image/");
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const dataUrl = evt.target?.result as string;
+        if (isImage) {
+          const img = document.createElement("img");
+          img.src = dataUrl;
+          img.style.maxWidth = "100%";
+          img.style.width = "360px";
+          img.className = "memo-image";
+          editorRef.current?.appendChild(img);
+          onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+        } else {
+          const newFile = { id: `f${Date.now()}`, name: file.name, size: file.size, dataUrl: undefined };
+          onUpdate({ files: [...(memo.files ?? []), newFile], updatedAt: Date.now() });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  }, [onUpdate, memo.files]);
+
   // Toggle checkboxes / open link preview
   const handleClick = useCallback((e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
+    if (el.tagName === "IMG") {
+      setSelectedImg(el as HTMLImageElement);
+      return;
+    }
+    setSelectedImg(null);
     if (el.classList.contains("note-checkbox")) {
       const checked = el.dataset.checked === "true";
       el.dataset.checked = checked ? "false" : "true";
@@ -533,6 +608,7 @@ function MemoCard({
             cardRef={cardRef}
             borderClass={c.border}
             onInsertCheckLine={insertCheckLine}
+            onAttachFile={() => fileInputRef.current?.click()}
           />
         )}
 
@@ -544,9 +620,35 @@ function MemoCard({
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onClick={handleClick}
+          onPaste={handlePaste}
           className="note-editor min-h-[160px] px-3 py-3 text-sm text-slate-700 outline-none"
           data-placeholder="ここに入力..."
         />
+
+        {/* Image resize toolbar */}
+        {selectedImg && (
+          <div className="flex items-center gap-1 border-t border-slate-100 px-2 py-1.5">
+            <span className="text-[10px] text-slate-400 mr-1">画像サイズ:</span>
+            {([["小", "160px"], ["中", "280px"], ["大", "100%"]] as [string, string][]).map(([label, w]) => (
+              <button
+                key={label}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectedImg.style.width = w;
+                  selectedImg.style.maxWidth = "100%";
+                  onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+                }}
+                className="rounded px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-100"
+              >{label}</button>
+            ))}
+            <button
+              onMouseDown={(e) => { e.preventDefault(); setSelectedImg(null); }}
+              className="ml-auto rounded p-0.5 text-slate-300 hover:text-slate-500"
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        )}
 
         {/* Link preview popup */}
         {linkPreview && (
@@ -570,8 +672,29 @@ function MemoCard({
         )}
       </div>
 
+      {/* File attachments */}
+      {(memo.files?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t border-slate-100/60 px-3 py-2">
+          {memo.files!.map(f => (
+            <div key={f.id} className="flex items-center gap-1 rounded-full bg-white/60 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">
+              <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span className="max-w-[120px] truncate">{f.name}</span>
+              <button
+                onClick={() => onUpdate({ files: memo.files!.filter(x => x.id !== f.id), updatedAt: Date.now() })}
+                className="ml-0.5 text-slate-300 hover:text-red-400"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Date footer */}
       <p className="px-3 pb-2 text-[10px] text-slate-300">{fmtDate(memo.updatedAt)}</p>
+
+      {/* Hidden file input */}
+      <input ref={fileInputRef} type="file" accept="*/*" multiple className="hidden" onChange={handleFileAttach} />
     </div>
   );
 }

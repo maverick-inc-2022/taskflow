@@ -191,4 +191,5 @@ export interface StickyMemo {
   pinned?: boolean;
   createdAt: number;
   updatedAt: number;
+  files?: { id: string; name: string; size: number; dataUrl?: string }[];
 }

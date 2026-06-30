@@ -1336,8 +1336,6 @@ export default function App() {
           onClose={() => { setShowModal(false); setModalDefaultRepeat(undefined); }}
           onAdd={addTask}
           projects={projects}
-          people={people}
-          onAddPerson={addPerson}
           onAddProject={(label, color) => addProject(label, color, "📌")}
           defaultRepeat={modalDefaultRepeat}
         />
