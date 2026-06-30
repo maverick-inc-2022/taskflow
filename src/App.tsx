@@ -1265,8 +1265,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Notes panel — visible when a task or draft is selected */}
-          {(selectedId !== null || inlineAfter !== null) && (
+          {/* Notes panel — visible when a task or draft is selected (tasks mode only) */}
+          {mainMode === "tasks" && (selectedId !== null || inlineAfter !== null) && (
             <div className="shrink-0 overflow-y-auto py-6 pr-4 pl-3" style={{ width: rightWidth }}>
               {selectedId ? (() => {
                 const selectedTask = tasks.find((t) => t.id === selectedId);
