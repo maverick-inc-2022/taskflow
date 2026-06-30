@@ -1375,6 +1375,7 @@ export default function App() {
           projects={projects}
           onAddProject={(label, color) => addProject(label, color, "📌")}
           defaultRepeat={modalDefaultRepeat}
+          defaultProject={selectedProject ?? undefined}
         />
       )}
 

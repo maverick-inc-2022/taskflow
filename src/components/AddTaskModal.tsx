@@ -11,6 +11,7 @@ interface Props {
   projects: Project[];
   onAddProject?: (label: string, color: string) => void;
   defaultRepeat?: RepeatMode;
+  defaultProject?: string;
 }
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
@@ -63,9 +64,9 @@ function StatusIcon() {
   );
 }
 
-export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, defaultRepeat }: Props) {
+export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, defaultRepeat, defaultProject }: Props) {
   const [title, setTitle] = useState("");
-  const [project, setProject] = useState<ProjectId>("");
+  const [project, setProject] = useState<ProjectId>(defaultProject ?? "");
   const [due, setDue] = useState(TODAY);
   const [dueTime, setDueTime] = useState("");
   const [status, setStatus] = useState<TaskStatus>("not_started");
