@@ -1094,7 +1094,7 @@ export default function App() {
         {/* Body — resizable two-column */}
         <div ref={bodyRef} className="flex h-full">
           {/* Left column — scrolls independently */}
-          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0">
           {mainMode === "memos" ? (
             <MemoView
               memos={memos}
@@ -1274,8 +1274,11 @@ export default function App() {
                   <MobileTaskDetail
                     key={selectedTask.id}
                     task={selectedTask}
-                    onChangeMemos={(memos) => updateTask(selectedId!, { memos })}
-                    onChangeTitle={(title) => updateTask(selectedId!, { title })}
+                    projects={projects}
+                    people={people}
+                    onUpdate={(patch) => updateTask(selectedId!, patch)}
+                    onDelete={(id) => { deleteTask(id); setSelectedId(null); }}
+                    onToggle={toggle}
                     onClose={() => setSelectedId(null)}
                   />
                 ) : inlineAfter !== null ? (
@@ -1294,17 +1297,40 @@ export default function App() {
         </div>{/* end body flex row */}
         </main>
 
-        {/* Mobile FAB — opens AddTaskModal */}
-        {mainMode === "tasks" && !mobileSidebarOpen && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 active:scale-95 transition"
-            aria-label="タスクを追加"
-          >
-            <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-          </button>
+        {/* Mobile bottom navigation bar */}
+        {!mobileSidebarOpen && (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center border-t border-slate-200 bg-white pb-safe"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+            <button
+              onClick={() => { setMainMode("tasks"); }}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition ${mainMode === "tasks" ? "text-blue-600" : "text-slate-400"}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              タスク
+            </button>
+            {/* FAB (center) */}
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg active:scale-95 transition mx-3"
+              aria-label="タスクを追加"
+            >
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => setMainMode("memos")}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition ${mainMode === "memos" ? "text-blue-600" : "text-slate-400"}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              メモ
+            </button>
+          </nav>
         )}
       </div>
 
