@@ -866,7 +866,7 @@ export default function App() {
       )}
 
       {/* Desktop sidebar */}
-      <div className="hidden md:block">
+      <div className="hidden h-full md:block">
         <Sidebar {...sidebarProps} />
       </div>
 

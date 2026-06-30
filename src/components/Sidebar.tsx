@@ -115,7 +115,7 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`flex shrink-0 flex-col border-r border-slate-200 bg-white py-5 transition-all duration-200 ${
+      className={`flex h-full shrink-0 flex-col border-r border-slate-200 bg-white py-5 transition-all duration-200 ${
         collapsed ? "w-16 px-2" : "w-60 px-4"
       }`}
     >
