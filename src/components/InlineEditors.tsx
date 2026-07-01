@@ -6,8 +6,8 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 import { projectColorOptions } from "../data";
-import type { Person, Priority, Project, RepeatConfig, RepeatMode, Task } from "../types";
-import { dueLabel, priorityMeta, repeatLabel } from "../ui";
+import type { Person, Project, RepeatConfig, RepeatMode, Task } from "../types";
+import { dueLabel, repeatLabel } from "../ui";
 import { RepeatSelector } from "./CustomRepeatModal";
 
 // ── Portal base ───────────────────────────────────────────────────────────────
@@ -354,51 +354,6 @@ export function EditableDue({ task, today, onSave }: EditableDueProps) {
               </button>
             </div>
           </div>
-        </PortalDropdown>
-      )}
-    </span>
-  );
-}
-
-// ── Priority ──────────────────────────────────────────────────────────────────
-
-interface EditablePriorityProps {
-  task: Task;
-  onSave: (priority: Priority) => void;
-  variant?: "table" | "badge";
-}
-
-export function EditablePriority({ task, onSave, variant = "table" }: EditablePriorityProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  const pr = priorityMeta[task.priority];
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const baseClass = variant === "badge"
-    ? `flex h-5 w-6 cursor-pointer items-center justify-center rounded text-[10px] font-semibold transition hover:opacity-80 ${pr.className}`
-    : `inline-flex h-6 w-10 cursor-pointer items-center justify-center rounded-md text-xs font-semibold hover:opacity-80 ${pr.className}`;
-
-  return (
-    <span ref={ref} className="relative">
-      <span onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} className={baseClass}>
-        {pr.label}
-      </span>
-      {open && (
-        <PortalDropdown anchorEl={ref.current} onClose={() => setOpen(false)} minWidth={110}>
-          {(Object.keys(priorityMeta) as Priority[]).map((p) => (
-            <button key={p} onClick={() => { onSave(p); setOpen(false); }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${task.priority === p ? "font-semibold" : "text-slate-700"}`}>
-              <span className={`flex h-5 w-8 items-center justify-center rounded text-xs font-semibold ${priorityMeta[p].className}`}>
-                {priorityMeta[p].label}
-              </span>
-            </button>
-          ))}
         </PortalDropdown>
       )}
     </span>
