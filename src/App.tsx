@@ -601,12 +601,14 @@ export default function App() {
     setNotifications((ns) =>
       ns.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
-  const addTask = (data: Omit<Task, "id" | "done" | "starred">) => {
+  const addTask = (data: Omit<Task, "id" | "done" | "starred">): string => {
     const now = Date.now();
+    const id = `u${nextId++}`;
     setTasks((ts) => [
       ...ts,
-      { ...data, id: `u${nextId++}`, done: false, starred: false, createdAt: now, updatedAt: now },
+      { ...data, id, done: false, starred: false, createdAt: now, updatedAt: now },
     ]);
+    return id;
   };
 
   /** Insert a new task right after `afterId` with full field data. */
@@ -902,7 +904,10 @@ export default function App() {
       <QuickAddRow
         projects={projects}
         defaultProject={proj}
-        onAdd={(title, _ignored, due) => addTask({ title, project: proj, due })}
+        onAdd={(title, _ignored, due) => {
+          const id = addTask({ title, project: proj, due });
+          setSelectedId(id);
+        }}
       />
     );
   };
