@@ -601,12 +601,12 @@ export default function App() {
     setNotifications((ns) =>
       ns.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
-  const addTask = (data: Partial<Task> & { title: string; project: ProjectId; due: string }): string => {
+  const addTask = (data: { title: string; project: ProjectId; due: string } & Partial<Omit<Task, "title" | "project" | "due">>): string => {
     const now = Date.now();
     const id = `u${nextId++}`;
     setTasks((ts) => [
       ...ts,
-      { ...data, id, done: false, starred: false, createdAt: now, updatedAt: now },
+      { ...data, id, done: false, starred: false, createdAt: now, updatedAt: now } as Task,
     ]);
     return id;
   };
