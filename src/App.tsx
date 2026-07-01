@@ -217,7 +217,7 @@ export default function App() {
 
   const addMemo = () => {
     const now = Date.now();
-    setMemos(prev => [{ id: `memo_${now}_${memoSeq++}`, content: "", color: "yellow", createdAt: now, updatedAt: now }, ...prev]);
+    setMemos(prev => [...prev, { id: `memo_${now}_${memoSeq++}`, content: "", color: "yellow", createdAt: now, updatedAt: now }]);
   };
   const updateMemo = (id: string, patch: Partial<StickyMemo>) =>
     setMemos(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
