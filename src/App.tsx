@@ -601,7 +601,7 @@ export default function App() {
     setNotifications((ns) =>
       ns.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
-  const addTask = (data: Omit<Task, "id" | "done" | "starred">): string => {
+  const addTask = (data: Partial<Task> & { title: string; project: ProjectId; due: string }): string => {
     const now = Date.now();
     const id = `u${nextId++}`;
     setTasks((ts) => [
