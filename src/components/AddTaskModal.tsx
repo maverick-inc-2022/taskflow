@@ -1,25 +1,20 @@
 import { useEffect, useState } from "react";
 import { TODAY, projectColorOptions, repeatLabels } from "../data";
-import type { Project, ProjectId, RepeatConfig, RepeatMode, Subtask, Task, TaskStatus } from "../types";
+import type { Person, Project, ProjectId, RepeatConfig, RepeatMode, Subtask, Task } from "../types";
 import { XIcon } from "../icons";
 import CustomRepeatModal from "./CustomRepeatModal";
 import { applyPlainTextToMemos } from "../memoText";
+import { AvatarDisplay } from "../avatarIcons";
 
 interface Props {
   onClose: () => void;
   onAdd: (task: Omit<Task, "id" | "done" | "starred">) => void;
   projects: Project[];
+  people?: Person[];
   onAddProject?: (label: string, color: string) => void;
   defaultRepeat?: RepeatMode;
   defaultProject?: string;
 }
-
-const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
-  { value: "not_started", label: "未着手",   color: "text-slate-400" },
-  { value: "in_progress", label: "進行中",   color: "text-blue-500"  },
-  { value: "in_review",   label: "レビュー中", color: "text-amber-500" },
-  { value: "done",        label: "完了",     color: "text-emerald-500" },
-];
 
 function CalIcon() {
   return (
@@ -56,20 +51,13 @@ function MemoIcon() {
     </svg>
   );
 }
-function StatusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/>
-    </svg>
-  );
-}
 
-export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, defaultRepeat, defaultProject }: Props) {
+export default function AddTaskModal({ onClose, onAdd, projects, people = [], onAddProject, defaultRepeat, defaultProject }: Props) {
   const [title, setTitle] = useState("");
   const [project, setProject] = useState<ProjectId>(defaultProject ?? "");
   const [due, setDue] = useState(TODAY);
   const [dueTime, setDueTime] = useState("");
-  const [status, setStatus] = useState<TaskStatus>("not_started");
+  const [owner, setOwner] = useState<string | undefined>(people.find(p => p.id === "me")?.id);
   const [memoText, setMemoText] = useState("");
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSub, setNewSub] = useState("");
@@ -97,8 +85,7 @@ export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, d
       project,
       due,
       dueTime: dueTime || undefined,
-      priority: "mid",
-      status,
+      owner: owner || undefined,
       subtasks: subtasks.length > 0 ? subtasks : undefined,
       memos: memos.length > 0 ? memos : undefined,
       repeat: repeat !== "none" ? repeat : undefined,
@@ -108,7 +95,7 @@ export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, d
   };
 
   const selectedProject = projects.find((p) => p.id === project);
-  const currentStatusColor = STATUS_OPTIONS.find((s) => s.value === status)?.color ?? "text-slate-400";
+
 
   const rowClass = "flex items-center gap-3 border-b border-slate-100 px-4 py-3";
   const inputClass = "flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none";
@@ -266,18 +253,26 @@ export default function AddTaskModal({ onClose, onAdd, projects, onAddProject, d
             )}
           </div>
 
-          {/* ステータス */}
+          {/* 担当者 */}
           <div className={rowClass}>
-            <StatusIcon />
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as TaskStatus)}
-              className={`${inputClass} cursor-pointer ${currentStatusColor}`}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            <div className="flex flex-1 items-center gap-2">
+              {owner && people.find(p => p.id === owner) && (
+                <AvatarDisplay avatar={people.find(p => p.id === owner)!.avatar} name={people.find(p => p.id === owner)!.name} size={20} />
+              )}
+              <select
+                value={owner ?? ""}
+                onChange={(e) => setOwner(e.target.value || undefined)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">未割当</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name.replace("（自分）", "")}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* メモ */}
