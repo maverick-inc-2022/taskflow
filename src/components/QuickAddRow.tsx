@@ -12,23 +12,18 @@ export default function QuickAddRow({ onAdd, projects, defaultProject = "" }: Pr
   const [title, setTitle] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const committingRef = useRef(false);
-
   const project = projects.find((p) => p.id === defaultProject);
 
-  const addAndClear = (refocus: boolean) => {
-    if (committingRef.current) return;
+  const addAndClear = () => {
     const t = title.trim();
     if (!t) return;
-    committingRef.current = true;
     onAdd(t, defaultProject, TODAY);
     setTitle("");
-    committingRef.current = false;
-    if (refocus) inputRef.current?.focus();
+    inputRef.current?.focus();
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); addAndClear(true); }
+    if (e.key === "Enter") { e.preventDefault(); addAndClear(); }
     if (e.key === "Escape") { setTitle(""); inputRef.current?.blur(); }
   };
 
@@ -48,7 +43,7 @@ export default function QuickAddRow({ onAdd, projects, defaultProject = "" }: Pr
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onFocus={() => setFocused(true)}
-        onBlur={() => { setFocused(false); addAndClear(false); }}
+        onBlur={() => setFocused(false)}
         onKeyDown={handleKey}
         placeholder="タスクを追加…"
         className="flex-1 border-0 bg-transparent text-[15px] text-slate-500 outline-none placeholder:text-slate-400 focus:text-slate-800 focus:placeholder:text-slate-300"

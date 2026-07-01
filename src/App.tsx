@@ -909,7 +909,6 @@ export default function App() {
         <p className="px-3 py-6 text-center text-sm text-slate-400">
           タスクはありません 🎉
         </p>
-        {inlineAddButton("empty")}
       </div>
     ) : (
       <>
@@ -923,7 +922,6 @@ export default function App() {
               {g.label}:
             </h3>
             <div className="space-y-0">{renderList(g.tasks)}</div>
-            {inlineAddButton(`group:${g.key}`)}
           </div>
         ))}
       </>
@@ -1270,6 +1268,7 @@ export default function App() {
                     {listSortControl}
                   </div>
                   {renderGrouped(groups)}
+                  {inlineAddButton("bottom")}
                 </section>
 
                 {!settings.hideCompleted && doneInView.length > 0 && (
