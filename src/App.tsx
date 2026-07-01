@@ -238,7 +238,11 @@ export default function App() {
     setMemos(prev => {
       const src = prev.find(m => m.id === id);
       if (!src) return prev;
-      return [{ ...src, id: `memo_dup_${now}_${memoSeq++}`, createdAt: now, updatedAt: now }, ...prev];
+      const dup = { ...src, id: `memo_dup_${now}_${memoSeq++}`, createdAt: now, updatedAt: now };
+      const idx = prev.findIndex(m => m.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, dup);
+      return next;
     });
   };
   const addMemoCategory = (name: string, color: string) => {
