@@ -892,13 +892,16 @@ export default function App() {
       </Fragment>
     ));
 
-  const inlineAddButton = (_groupKey: string, defaultProject?: string) => (
-    <QuickAddRow
-      projects={projects}
-      defaultProject={defaultProject ?? (view === "project" ? (selectedProject ?? undefined) : undefined)}
-      onAdd={(title, project, due) => addTask({ title, project, due })}
-    />
-  );
+  const inlineAddButton = (_groupKey: string, forceProject?: string) => {
+    const proj = forceProject ?? (view === "project" ? (selectedProject ?? "") : "");
+    return (
+      <QuickAddRow
+        projects={projects}
+        defaultProject={proj}
+        onAdd={(title, _ignored, due) => addTask({ title, project: proj, due })}
+      />
+    );
+  };
 
   const renderGrouped = (gs: TaskGroup[]) =>
     gs.length === 0 ? (
