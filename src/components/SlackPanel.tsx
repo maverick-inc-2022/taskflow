@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { searchMessages, validateToken, type SlackSavedItem } from "../slack";
+import { searchMessages, fetchListItems, extractListId, validateToken, type SlackSavedItem, type SlackListItem } from "../slack";
 import { BookmarkIcon, ExternalLinkIcon, SlackIcon } from "../icons";
 
 const STORAGE_KEY = "taskflow_slack_token";
 const QUERY_KEY = "taskflow_slack_query";
+const LIST_KEY = "taskflow_slack_list";
 const DEFAULT_QUERY = "★";
 
 function Spinner() {
@@ -45,6 +46,38 @@ export default function SlackPanel() {
     localStorage.setItem(QUERY_KEY, query);
     if (token) load(token, query);
   };
+
+  // ── Slack リスト（Lists API） ──
+  const [listInput, setListInput] = useState<string>(() => localStorage.getItem(LIST_KEY) ?? "");
+  const [listItems, setListItems] = useState<SlackListItem[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+
+  const loadList = useCallback(async (t: string, input: string) => {
+    const listId = extractListId(input);
+    if (!listId) { setListError("リストのURLまたはID（F…）を入力してください"); return; }
+    setListLoading(true);
+    setListError(null);
+    try {
+      const data = await fetchListItems(t, listId);
+      setListItems(data);
+    } catch (e) {
+      setListError(e instanceof Error ? e.message : "リストの取得に失敗しました");
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  const runList = () => {
+    localStorage.setItem(LIST_KEY, listInput);
+    if (token) loadList(token, listInput);
+  };
+
+  // 連携済みになったら、保存済みリストを自動で読み込む
+  useEffect(() => {
+    if (connected && token && listInput.trim()) loadList(token, listInput);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
 
   // Auto-connect on mount if token is stored
   useEffect(() => {
@@ -186,6 +219,61 @@ export default function SlackPanel() {
               {error && <p className="text-xs text-red-500">{error}</p>}
             </>
           )}
+        </div>
+      )}
+
+      {/* Connected — Slack List */}
+      {connected && (
+        <div className="mb-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500">Slackリスト</span>
+            <div className="flex flex-1 gap-1.5">
+              <input
+                value={listInput}
+                onChange={e => setListInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && runList()}
+                placeholder="リストのURL または F… ID"
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-400"
+              />
+              <button
+                onClick={runList}
+                disabled={listLoading || !listInput.trim()}
+                className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                表示
+              </button>
+            </div>
+          </div>
+
+          {listLoading && (
+            <div className="flex items-center justify-center gap-2 py-4 text-sm text-slate-400"><Spinner /> 読み込み中...</div>
+          )}
+          {listError && (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+              {listError}
+              <button onClick={runList} className="ml-2 underline hover:no-underline">再試行</button>
+            </div>
+          )}
+          {!listLoading && !listError && listItems.length > 0 && (
+            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {listItems.map(it => (
+                <li key={it.id} className="px-3 py-2">
+                  <p className="text-sm font-medium text-slate-700">{it.title}</p>
+                  {it.detail && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{it.detail}</p>}
+                  {it.assignees.length > 0 && (
+                    <p className="mt-1 text-[11px] text-slate-400">👤 {it.assignees.join("、")}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!listLoading && !listError && listInput.trim() && listItems.length === 0 && (
+            <p className="py-3 text-center text-xs text-slate-400">アイテムがありません（またはlists:readスコープ未付与）</p>
+          )}
+          <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+            Slackでリストを開き、URLをコピーして貼り付けてください。表示には <code className="rounded bg-slate-100 px-1">lists:read</code> スコープが必要です。
+          </p>
+          <div className="my-3 border-t border-slate-100" />
         </div>
       )}
 

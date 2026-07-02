@@ -60,6 +60,110 @@ export async function searchMessages(token: string, query: string, count = 20): 
 }
 
 
+// ── Slack Lists (2025 公開API) ─────────────────────────────────────────────
+
+export interface SlackListItem {
+  id: string;
+  title: string;
+  detail: string;
+  assignees: string[];
+}
+
+/** Slackの「リスト」URL/入力から list_id (F...) を取り出す。 */
+export function extractListId(input: string): string | null {
+  const s = input.trim();
+  // 生のID
+  if (/^F[A-Z0-9]{6,}$/i.test(s)) return s.toUpperCase();
+  // URL中の F... を拾う（例: https://app.slack.com/lists/T…/F0AB12CD）
+  const m = s.match(/\b(F[A-Z0-9]{6,})\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** Slack rich_text ブロックからプレーンテキストを抽出する（再帰）。 */
+function richTextToPlain(node: unknown): string {
+  if (node == null) return "";
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(richTextToPlain).join("");
+  if (typeof node === "object") {
+    const o = node as Record<string, unknown>;
+    if (typeof o.text === "string") return o.text;
+    if (typeof o.url === "string" && !o.text) return o.url as string;
+    if (Array.isArray(o.elements)) return o.elements.map(richTextToPlain).join("");
+    if (o.type === "rich_text_section" || o.type === "rich_text_list") {
+      return richTextToPlain(o.elements);
+    }
+  }
+  return "";
+}
+
+/** リストのセル(field)から表示テキストを得る。 */
+function fieldText(f: Record<string, unknown>): string {
+  if (Array.isArray(f.rich_text)) return richTextToPlain(f.rich_text).trim();
+  if (typeof f.text === "string") return f.text.trim();
+  if (typeof f.value === "string") return f.value.trim();
+  if (typeof f.number === "number") return String(f.number);
+  if (f.select && typeof f.select === "object") {
+    const sel = f.select as Record<string, unknown>;
+    return String(sel.label ?? sel.value ?? "");
+  }
+  if (typeof f.date === "string") return f.date;
+  return "";
+}
+
+/** セルからユーザーID配列を得る。 */
+function fieldUsers(f: Record<string, unknown>): string[] {
+  const raw = f.user ?? f.users ?? f.person ?? f.assignee;
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === "string");
+  if (typeof raw === "string") return [raw];
+  return [];
+}
+
+/** ユーザーIDを表示名に解決（users:read）。失敗時はIDのまま。 */
+async function resolveUserNames(ids: string[], token: string): Promise<Record<string, string>> {
+  const unique = [...new Set(ids)].filter((id) => /^U[A-Z0-9]+$/i.test(id));
+  const pairs = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const data = await slackGet(`users.info?user=${id}`, token);
+        const u = data.user as { profile?: { display_name?: string; real_name?: string } } | undefined;
+        return [id, u?.profile?.display_name || u?.profile?.real_name || id] as const;
+      } catch {
+        return [id, id] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(pairs);
+}
+
+/** Slackリストのアイテム一覧を取得する（lists:read スコープ必要）。 */
+export async function fetchListItems(token: string, listId: string, limit = 100): Promise<SlackListItem[]> {
+  const params = new URLSearchParams({ list_id: listId, limit: String(limit) });
+  const data = await slackGet(`slackLists.items.list?${params}`, token);
+  const items = (data.items as Array<Record<string, unknown>> | undefined) ?? [];
+
+  const parsed = items.map((it) => {
+    const fields = (it.fields as Array<Record<string, unknown>> | undefined) ?? [];
+    const texts = fields.map(fieldText).filter(Boolean);
+    const userIds = fields.flatMap(fieldUsers);
+    const full = texts.join(" / ");
+    const title = (texts[0] ?? "(無題)").split("\n")[0].slice(0, 80);
+    return {
+      id: String(it.id ?? Math.random()),
+      title,
+      detail: full.length > title.length ? full.slice(0, 200) : "",
+      assignees: userIds,
+    };
+  });
+
+  // 担当者名を解決
+  const allIds = parsed.flatMap((p) => p.assignees);
+  if (allIds.length) {
+    const names = await resolveUserNames(allIds, token);
+    for (const p of parsed) p.assignees = p.assignees.map((id) => names[id] ?? id);
+  }
+  return parsed;
+}
+
 export async function validateToken(
   token: string
 ): Promise<{ ok: true; teamName: string; userName: string } | { ok: false; error: string }> {
