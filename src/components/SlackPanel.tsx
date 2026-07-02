@@ -233,19 +233,36 @@ export default function SlackPanel() {
       )}
 
       {/* Connected — list */}
-      {items.length > 0 && (
-        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-          {items.map(it => (
-            <li key={it.id} className="px-3 py-2">
-              <p className="text-sm font-medium text-slate-700">{it.title}</p>
-              {it.detail && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{it.detail}</p>}
-              {it.assignees.length > 0 && (
-                <p className="mt-1 text-[11px] text-slate-400">👤 {it.assignees.join("、")}</p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      {items.length > 0 && (() => {
+        const listHref = /^https?:\/\//.test(listInput.trim()) ? listInput.trim() : "";
+        return (
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+            {items.map(it => {
+              const href = it.url || listHref;
+              return (
+                <li key={it.id}>
+                  <a
+                    href={href || "#"}
+                    target={href ? "_blank" : undefined}
+                    rel="noreferrer"
+                    onClick={!href ? e => e.preventDefault() : undefined}
+                    className="flex items-start gap-2 px-3 py-2 transition hover:bg-slate-50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-700">{it.title}</p>
+                      {it.detail && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{it.detail}</p>}
+                      {it.assignees.length > 0 && (
+                        <p className="mt-1 text-[11px] text-slate-400">👤 {it.assignees.join("、")}</p>
+                      )}
+                    </div>
+                    {href && <ExternalLinkIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300" />}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        );
+      })()}
     </section>
   );
 }

@@ -67,6 +67,8 @@ export interface SlackListItem {
   title: string;
   detail: string;
   assignees: string[];
+  /** アイテム内のメッセージ等へのリンク（無ければ空） */
+  url: string;
 }
 
 /** Slackの「リスト」URL/入力から list_id (F...) を取り出す。 */
@@ -118,6 +120,26 @@ function fieldUsers(f: Record<string, unknown>): string[] {
   return [];
 }
 
+/** アイテムを再帰的に走査して最初のSlackメッセージ/パーマリンクURLを返す。 */
+function firstSlackUrl(node: unknown): string {
+  if (typeof node === "string") {
+    return /^https?:\/\/[^\s]*slack\.com\/(archives|app)\//.test(node) ? node : "";
+  }
+  if (Array.isArray(node)) {
+    for (const x of node) { const u = firstSlackUrl(x); if (u) return u; }
+    return "";
+  }
+  if (node && typeof node === "object") {
+    // permalink 系のキーを優先
+    const o = node as Record<string, unknown>;
+    for (const key of ["permalink", "url", "link"]) {
+      if (typeof o[key] === "string" && firstSlackUrl(o[key])) return o[key] as string;
+    }
+    for (const v of Object.values(o)) { const u = firstSlackUrl(v); if (u) return u; }
+  }
+  return "";
+}
+
 /** ユーザーIDを表示名に解決（users:read）。失敗時はIDのまま。 */
 async function resolveUserNames(ids: string[], token: string): Promise<Record<string, string>> {
   const unique = [...new Set(ids)].filter((id) => /^U[A-Z0-9]+$/i.test(id));
@@ -152,6 +174,7 @@ export async function fetchListItems(token: string, listId: string, limit = 100)
       title,
       detail: full.length > title.length ? full.slice(0, 200) : "",
       assignees: userIds,
+      url: firstSlackUrl(it),
     };
   });
 
