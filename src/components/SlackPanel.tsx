@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchLaterItems, validateToken, type SlackSavedItem } from "../slack";
+import { searchMessages, validateToken, type SlackSavedItem } from "../slack";
 import { BookmarkIcon, ExternalLinkIcon, SlackIcon } from "../icons";
 
 const STORAGE_KEY = "taskflow_slack_token";
+const QUERY_KEY = "taskflow_slack_query";
+const DEFAULT_QUERY = "★";
 
 function Spinner() {
   return (
@@ -22,12 +24,15 @@ export default function SlackPanel() {
   const [error, setError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const [query, setQuery] = useState<string>(() => localStorage.getItem(QUERY_KEY) ?? DEFAULT_QUERY);
 
-  const load = useCallback(async (t: string) => {
+  const load = useCallback(async (t: string, q: string) => {
+    const searchQuery = q.trim();
+    if (!searchQuery) { setItems([]); return; }
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchLaterItems(t);
+      const data = await searchMessages(t, searchQuery);
       setItems(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "取得に失敗しました");
@@ -35,6 +40,11 @@ export default function SlackPanel() {
       setLoading(false);
     }
   }, []);
+
+  const runSearch = () => {
+    localStorage.setItem(QUERY_KEY, query);
+    if (token) load(token, query);
+  };
 
   // Auto-connect on mount if token is stored
   useEffect(() => {
@@ -44,7 +54,7 @@ export default function SlackPanel() {
       if (result.ok) {
         setConnected(true);
         setTeamInfo({ teamName: result.teamName, userName: result.userName });
-        load(token);
+        load(token, query);
       } else {
         // Stored token is invalid — clear it
         localStorage.removeItem(STORAGE_KEY);
@@ -66,7 +76,7 @@ export default function SlackPanel() {
       setConnected(true);
       setTeamInfo({ teamName: result.teamName, userName: result.userName });
       setInputValue("");
-      load(t);
+      load(t, query);
     } else {
       setError(result.error);
     }
@@ -90,8 +100,8 @@ export default function SlackPanel() {
         <div>
           <h2 className="flex items-center gap-2 text-base font-bold text-slate-800">
             <SlackIcon className="h-5 w-5" />
-            後で
-            <span className="text-xs font-normal text-slate-400">(Slack)</span>
+            Slack検索
+            <span className="text-xs font-normal text-slate-400">(タスク)</span>
           </h2>
           {teamInfo && (
             <p className="mt-0.5 text-[11px] text-slate-400">
@@ -103,7 +113,7 @@ export default function SlackPanel() {
           {connected && (
             <>
               <button
-                onClick={() => load(token)}
+                onClick={() => load(token, query)}
                 disabled={loading}
                 title="更新"
                 className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
@@ -150,7 +160,7 @@ export default function SlackPanel() {
                 <ol className="list-decimal list-inside space-y-1">
                   <li><a href="https://api.slack.com/apps" target="_blank" rel="noreferrer" className="text-blue-500 underline">api.slack.com/apps</a> でアプリを作成</li>
                   <li>「OAuth &amp; Permissions」→ User Token Scopesに<br/>
-                    <code className="rounded bg-slate-200 px-1">stars:read</code> と <code className="rounded bg-slate-200 px-1">channels:read</code> と <code className="rounded bg-slate-200 px-1">users:read</code> を追加
+                    <code className="rounded bg-slate-200 px-1">search:read.public</code>（private/im/mpimも）と <code className="rounded bg-slate-200 px-1">channels:read</code>・<code className="rounded bg-slate-200 px-1">users:read</code> を追加
                   </li>
                   <li>「Install to Workspace」でインストール</li>
                   <li>「User OAuth Token」(<code className="rounded bg-slate-200 px-1">xoxp-...</code>) をコピー</li>
@@ -179,6 +189,31 @@ export default function SlackPanel() {
         </div>
       )}
 
+      {/* Connected — search box */}
+      {connected && (
+        <div className="mb-3 space-y-1.5">
+          <div className="flex gap-2">
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && runSearch()}
+              placeholder="検索キーワード（例: ★）"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+            />
+            <button
+              onClick={runSearch}
+              disabled={loading || !query.trim()}
+              className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+            >
+              検索
+            </button>
+          </div>
+          <p className="text-[11px] leading-relaxed text-slate-400">
+            Slackは「後で対応（保存）」の取得APIを廃止したため、キーワード検索で拾います。タスク投稿に付けた記号（★など）や #タグ を入れてください。
+          </p>
+        </div>
+      )}
+
       {/* Connected — loading */}
       {connected && loading && items.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
@@ -190,13 +225,13 @@ export default function SlackPanel() {
       {connected && error && (
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
-          <button onClick={() => load(token)} className="ml-2 underline hover:no-underline">再試行</button>
+          <button onClick={() => load(token, query)} className="ml-2 underline hover:no-underline">再試行</button>
         </div>
       )}
 
       {/* Connected — empty */}
       {connected && !loading && !error && items.length === 0 && (
-        <p className="py-6 text-center text-sm text-slate-400">「後で」に保存したメッセージはありません</p>
+        <p className="py-6 text-center text-sm text-slate-400">「{query}」に一致するメッセージはありません</p>
       )}
 
       {/* Connected — list */}
