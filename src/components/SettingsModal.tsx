@@ -3,7 +3,7 @@ import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 import { useGoogleLogin } from "@react-oauth/google";
 import type { FontSize, LayoutMode, Person, Settings } from "../types";
 import Modal from "./Modal";
-import { GmailIcon, GoogleCalendarIcon, SlackIcon } from "../icons";
+import { GmailIcon, GoogleCalendarIcon } from "../icons";
 
 const fontSizes: { id: FontSize; label: string }[] = [
   { id: "small", label: "小" },
@@ -26,9 +26,6 @@ interface Props {
   gmailConnected?: boolean;
   onGmailConnect?: () => void;
   onGmailDisconnect?: () => void;
-  slackConnected?: boolean;
-  onSlackConnect?: () => void;
-  onSlackDisconnect?: () => void;
   userEmail?: string;
   userPassword?: string;
   onChangePassword?: (current: string, next: string) => string | null;
@@ -79,7 +76,7 @@ function Row({
   );
 }
 
-export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, slackConnected, onSlackConnect, onSlackDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
+export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
   const googleLogin = useGoogleLogin({
@@ -157,12 +154,6 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
           <Toggle
             on={settings.notifyEmail}
             onClick={() => set({ notifyEmail: !settings.notifyEmail })}
-          />
-        </Row>
-        <Row label="Slack通知" desc="保存したメッセージの更新を通知">
-          <Toggle
-            on={settings.notifySlack}
-            onClick={() => set({ notifySlack: !settings.notifySlack })}
           />
         </Row>
       </div>
@@ -352,31 +343,6 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
           ) : (
             <button
               onClick={onGmailConnect}
-              className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 transition"
-            >
-              連携する
-            </button>
-          )}
-        </div>
-        {/* Slack */}
-        <div className="flex items-center justify-between gap-4 py-3">
-          <div className="flex items-center gap-3">
-            <SlackIcon className="h-6 w-6 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-slate-700">Slack</p>
-              <p className="text-xs text-slate-400">保存したメッセージをタスクとして連携する</p>
-            </div>
-          </div>
-          {slackConnected ? (
-            <button
-              onClick={onSlackDisconnect}
-              className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600 hover:bg-red-50 hover:text-red-500 transition"
-            >
-              連携中
-            </button>
-          ) : (
-            <button
-              onClick={onSlackConnect}
               className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 transition"
             >
               連携する

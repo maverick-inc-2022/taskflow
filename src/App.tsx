@@ -4,7 +4,6 @@ import { AvatarDisplay } from "./avatarIcons";
 import Sidebar, { type View } from "./components/Sidebar";
 import TaskItem from "./components/TaskItem";
 import GmailPanel from "./components/GmailPanel";
-import SlackPanel from "./components/SlackPanel";
 import GoogleCalendarPanel from "./components/GoogleCalendarPanel";
 import TaskDetailPanel from "./components/TaskDetailPanel";
 import MobileTaskDetail from "./components/MobileTaskDetail";
@@ -429,7 +428,6 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     if (token) localStorage.setItem('taskflow_gmail_token', token);
     else localStorage.removeItem('taskflow_gmail_token');
   };
-  const [slackConnected, setSlackConnected] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => {
     try {
       const s = localStorage.getItem('taskflow_settings');
@@ -1806,7 +1804,6 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
             onConnect={setGmailToken}
             onDisconnect={() => setGmailToken(null)}
           />
-          <SlackPanel />
         </div>
       </div>
 
@@ -1847,9 +1844,6 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           gmailConnected={!!gmailToken}
           onGmailConnect={() => setGmailToken("mock_gmail_token")}
           onGmailDisconnect={() => setGmailToken(null)}
-          slackConnected={slackConnected}
-          onSlackConnect={() => setSlackConnected(true)}
-          onSlackDisconnect={() => setSlackConnected(false)}
           userEmail={profile.email}
           onChangePassword={handleChangePassword}
           onExport={exportData}
