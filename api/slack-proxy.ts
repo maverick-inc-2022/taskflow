@@ -14,6 +14,7 @@ const ALLOWED = new Set([
   "conversations.info",
   "users.info",
   "slackLists.items.list",
+  "bookmarks.list",
 ]);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

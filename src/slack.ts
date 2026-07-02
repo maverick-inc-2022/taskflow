@@ -164,6 +164,38 @@ export async function fetchListItems(token: string, listId: string, limit = 100)
   return parsed;
 }
 
+// ── チャンネルのブックマーク（bookmarks.list / bookmarks:read） ──────────────
+
+export interface SlackBookmark {
+  id: string;
+  title: string;
+  link: string;
+  emoji: string;
+}
+
+/** チャンネルのURL/入力から channel_id (C...) を取り出す。 */
+export function extractChannelId(input: string): string | null {
+  const s = input.trim();
+  if (/^C[A-Z0-9]{6,}$/i.test(s)) return s.toUpperCase();
+  const m = s.match(/\b(C[A-Z0-9]{6,})\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** チャンネルのブックマーク一覧を取得（bookmarks:read スコープ必要）。 */
+export async function fetchBookmarks(token: string, channelId: string): Promise<SlackBookmark[]> {
+  const params = new URLSearchParams({ channel_id: channelId });
+  const data = await slackGet(`bookmarks.list?${params}`, token);
+  const bookmarks = (data.bookmarks as Array<Record<string, unknown>> | undefined) ?? [];
+  return bookmarks
+    .filter((b) => b.type === "link" || b.link)
+    .map((b) => ({
+      id: String(b.id ?? ""),
+      title: (b.title as string | undefined)?.trim() || (b.link as string | undefined) || "(無題)",
+      link: (b.link as string | undefined) ?? "",
+      emoji: (b.emoji as string | undefined) ?? "",
+    }));
+}
+
 export async function validateToken(
   token: string
 ): Promise<{ ok: true; teamName: string; userName: string } | { ok: false; error: string }> {
