@@ -47,6 +47,7 @@ import type {
   Task,
 } from "./types";
 import { groupTasksByDate, nextDue, orderTasks, type TaskGroup } from "./ui";
+import { useGoogleAuth } from "./useGoogleAuth";
 import {
   BellIcon,
   CalendarIcon,
@@ -412,22 +413,8 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     a.click();
     URL.revokeObjectURL(url);
   };
-  const [googleCalToken, setGoogleCalTokenRaw] = useState<string | null>(() =>
-    localStorage.getItem('taskflow_gcal_token')
-  );
-  const setGoogleCalToken = (token: string | null) => {
-    setGoogleCalTokenRaw(token);
-    if (token) localStorage.setItem('taskflow_gcal_token', token);
-    else localStorage.removeItem('taskflow_gcal_token');
-  };
-  const [gmailToken, setGmailTokenRaw] = useState<string | null>(() =>
-    localStorage.getItem('taskflow_gmail_token')
-  );
-  const setGmailToken = (token: string | null) => {
-    setGmailTokenRaw(token);
-    if (token) localStorage.setItem('taskflow_gmail_token', token);
-    else localStorage.removeItem('taskflow_gmail_token');
-  };
+  const gcal = useGoogleAuth("https://www.googleapis.com/auth/calendar", "taskflow_gcal_token");
+  const gmail = useGoogleAuth("https://www.googleapis.com/auth/gmail.readonly", "taskflow_gmail_token");
   const [settings, setSettings] = useState<Settings>(() => {
     try {
       const s = localStorage.getItem('taskflow_settings');
@@ -1794,15 +1781,15 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         </div>
         <div className="space-y-6 px-4 py-4">
           <GoogleCalendarPanel
-            accessToken={googleCalToken}
-            onConnect={setGoogleCalToken}
-            onDisconnect={() => setGoogleCalToken(null)}
+            accessToken={gcal.token}
+            onSignIn={gcal.signIn}
+            onDisconnect={gcal.signOut}
             onAddTask={(title, due) => addTask({ title, due, project: "work" })}
           />
           <GmailPanel
-            accessToken={gmailToken}
-            onConnect={setGmailToken}
-            onDisconnect={() => setGmailToken(null)}
+            accessToken={gmail.token}
+            onSignIn={gmail.signIn}
+            onDisconnect={gmail.signOut}
           />
         </div>
       </div>
@@ -1838,12 +1825,12 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           onRemovePerson={removePerson}
           onUpdatePerson={updatePerson}
           avatarChoices={avatarChoices}
-          googleCalConnected={!!googleCalToken}
-          onGoogleCalConnect={setGoogleCalToken}
-          onGoogleCalDisconnect={() => setGoogleCalToken(null)}
-          gmailConnected={!!gmailToken}
-          onGmailConnect={() => setGmailToken("mock_gmail_token")}
-          onGmailDisconnect={() => setGmailToken(null)}
+          googleCalConnected={!!gcal.token}
+          onGoogleCalConnect={gcal.signIn}
+          onGoogleCalDisconnect={gcal.signOut}
+          gmailConnected={!!gmail.token}
+          onGmailConnect={gmail.signIn}
+          onGmailDisconnect={gmail.signOut}
           userEmail={profile.email}
           onChangePassword={handleChangePassword}
           onExport={exportData}

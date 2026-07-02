@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
 import {
   fetchCalendarEvents,
   eventStartDate,
@@ -45,7 +44,7 @@ function fmtTime(dateTime: string): string {
 interface Props {
   onAddTask?: (title: string, due: string) => void;
   accessToken?: string | null;
-  onConnect?: (token: string) => void;
+  onSignIn?: () => void;
   onDisconnect?: () => void;
 }
 
@@ -58,7 +57,7 @@ function Spinner() {
   );
 }
 
-export default function GoogleCalendarPanel({ onAddTask, accessToken, onConnect, onDisconnect }: Props) {
+export default function GoogleCalendarPanel({ onAddTask, accessToken, onSignIn, onDisconnect }: Props) {
   const [events, setEvents] = useState<GCalEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,12 +90,6 @@ export default function GoogleCalendarPanel({ onAddTask, accessToken, onConnect,
     if (accessToken) load(accessToken);
     else setEvents([]);
   }, [accessToken, load]);
-
-  const login = useGoogleLogin({
-    scope: "https://www.googleapis.com/auth/calendar",
-    onSuccess: (res) => onConnect?.(res.access_token),
-    onError: () => setError("Googleログインに失敗しました"),
-  });
 
   const handleAddTask = (ev: GCalEvent) => {
     const due = eventStartDate(ev);
@@ -167,7 +160,7 @@ export default function GoogleCalendarPanel({ onAddTask, accessToken, onConnect,
           <p className="text-sm text-slate-500">Google カレンダーと連携して<br />予定をTaskFlowに表示できます</p>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
-            onClick={() => login()}
+            onClick={onSignIn}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition"
           >
             <GoogleCalendarIcon className="h-4 w-4 brightness-0 invert" />

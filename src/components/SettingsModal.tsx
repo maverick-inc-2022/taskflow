@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
-import { useGoogleLogin } from "@react-oauth/google";
 import type { FontSize, LayoutMode, Person, Settings } from "../types";
 import Modal from "./Modal";
 import { GmailIcon, GoogleCalendarIcon } from "../icons";
@@ -21,7 +20,7 @@ interface Props {
   onUpdatePerson?: (id: string, name: string, avatar: string) => void;
   avatarChoices?: string[];
   googleCalConnected?: boolean;
-  onGoogleCalConnect?: (token: string) => void;
+  onGoogleCalConnect?: () => void;
   onGoogleCalDisconnect?: () => void;
   gmailConnected?: boolean;
   onGmailConnect?: () => void;
@@ -79,10 +78,6 @@ function Row({
 export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
-  const googleLogin = useGoogleLogin({
-    scope: "https://www.googleapis.com/auth/calendar",
-    onSuccess: (res) => onGoogleCalConnect?.(res.access_token),
-  });
   const [newName, setNewName] = useState("");
   const [newAvatar, setNewAvatar] = useState(DEFAULT_AVATAR);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -317,7 +312,7 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
             </button>
           ) : (
             <button
-              onClick={() => googleLogin()}
+              onClick={onGoogleCalConnect}
               className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100 transition"
             >
               連携する

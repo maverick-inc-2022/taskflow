@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
 import { fetchStarredEmails, type GmailEmail } from "../googleGmail";
 import { ExternalLinkIcon, GmailIcon, StarBadgeIcon } from "../icons";
 
 interface Props {
   accessToken?: string | null;
-  onConnect?: (token: string) => void;
+  onSignIn?: () => void;
   onDisconnect?: () => void;
 }
 
@@ -18,7 +17,7 @@ function Spinner() {
   );
 }
 
-export default function GmailPanel({ accessToken, onConnect, onDisconnect }: Props) {
+export default function GmailPanel({ accessToken, onSignIn, onDisconnect }: Props) {
   const [emails, setEmails] = useState<GmailEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +39,6 @@ export default function GmailPanel({ accessToken, onConnect, onDisconnect }: Pro
     if (accessToken) load(accessToken);
     else setEmails([]);
   }, [accessToken, load]);
-
-  const login = useGoogleLogin({
-    scope: "https://www.googleapis.com/auth/gmail.readonly",
-    onSuccess: res => onConnect?.(res.access_token),
-    onError: () => setError("Googleログインに失敗しました"),
-  });
 
   const handleDisconnect = () => {
     setEmails([]);
@@ -106,7 +99,7 @@ export default function GmailPanel({ accessToken, onConnect, onDisconnect }: Pro
           <p className="text-sm text-slate-500">Gmailと連携してスター付きメールを表示</p>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
-            onClick={() => login()}
+            onClick={onSignIn}
             className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
           >
             <GmailIcon className="h-4 w-4" />
