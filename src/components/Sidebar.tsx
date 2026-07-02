@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { projectColorOptions, projectIconOptions } from "../data";
+import { projectColorOptions, projectIconOptions, HOLD_PROJECT_ID } from "../data";
 import type { MemoCategory, Project, ProjectId } from "../types";
 import {
   ChevronLeftIcon,
@@ -39,6 +39,8 @@ interface Props {
   onAddTask: () => void;
   onAddProject: (label: string, color: string, icon: string) => void;
   onUpdateProject: (id: ProjectId, patch: { color?: string; icon?: string; label?: string }) => void;
+  onReorderProjects?: (fromId: ProjectId, toId: ProjectId) => void;
+  onDeleteProject?: (id: ProjectId) => void;
   /** Current top-level mode */
   mainMode: "tasks" | "memos";
   onChangeMainMode: (mode: "tasks" | "memos") => void;
@@ -83,6 +85,8 @@ export default function Sidebar({
   onAddTask,
   onAddProject,
   onUpdateProject,
+  onReorderProjects,
+  onDeleteProject,
   mainMode,
   onChangeMainMode,
   memoCategories = [],
@@ -97,6 +101,9 @@ export default function Sidebar({
   profile,
   onOpenProfile,
 }: Props) {
+  const [dragProjectId, setDragProjectId] = useState<ProjectId | null>(null);
+  const [dragOverProjectId, setDragOverProjectId] = useState<ProjectId | null>(null);
+  const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState<ProjectId | null>(null);
   const [pickerProjectId, setPickerProjectId] = useState<ProjectId | null>(null);
   const [pickerCategoryId, setPickerCategoryId] = useState<string | null>(null);
   const [addingProject, setAddingProject] = useState(false);
@@ -419,9 +426,9 @@ export default function Sidebar({
       )}
 
       {/* Projects — tasks mode only */}
-      {mainMode === "tasks" && <div className="mt-6 flex-1">
+      {mainMode === "tasks" && <div className="mt-6 flex-1 min-h-0 overflow-y-auto">
         {!collapsed && (
-          <div className="flex items-center justify-between px-3 pb-2">
+          <div className="flex items-center justify-between px-3 pb-2 sticky top-0 bg-white z-10">
             <span className="text-xs font-semibold tracking-wide text-slate-400">プロジェクト</span>
             <button onClick={() => setAddingProject(true)} title="プロジェクトを追加"
               className="rounded text-slate-400 hover:text-blue-500">
@@ -468,20 +475,38 @@ export default function Sidebar({
         )}
 
         <ul className="space-y-0.5">
-          {projects.map((p) => {
+          {[...projects.filter(p => p.id !== HOLD_PROJECT_ID), ...projects.filter(p => p.id === HOLD_PROJECT_ID)].map((p) => {
             const active = view === "project" && selectedProject === p.id;
             const icon = p.icon ?? "📁";
+            const isDragging = dragProjectId === p.id;
+            const isOver = dragOverProjectId === p.id && dragProjectId !== p.id;
+            const isHold = p.id === HOLD_PROJECT_ID;
             return (
-              <li key={p.id} className="group relative">
+              <li
+                key={p.id}
+                className={`group relative transition-all ${isDragging ? "opacity-40" : ""} ${isOver ? "border-t-2 border-blue-400" : "border-t-2 border-transparent"}`}
+                draggable={!!onReorderProjects && !editingProjectId && !isHold}
+                onDragStart={() => !isHold && setDragProjectId(p.id)}
+                onDragOver={(e) => { e.preventDefault(); setDragOverProjectId(p.id); }}
+                onDrop={() => {
+                  if (dragProjectId && dragProjectId !== p.id) onReorderProjects?.(dragProjectId, p.id);
+                  setDragProjectId(null); setDragOverProjectId(null);
+                }}
+                onDragEnd={() => { setDragProjectId(null); setDragOverProjectId(null); }}
+              >
                 <div className={`flex w-full items-center gap-2.5 rounded-lg py-2 text-sm transition ${
                   collapsed ? "justify-center px-0" : "px-3"
-                } ${active ? "bg-blue-50 font-medium text-blue-600" : "text-slate-600 hover:bg-slate-100"}`}>
-                  {/* color dot — click to open color/icon picker */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPickerProjectId(pickerProjectId === p.id ? null : p.id); }}
-                    title="カラー・アイコンを変更"
-                    className={`h-3 w-3 shrink-0 rounded-full ${p.color} transition hover:ring-2 hover:ring-slate-300 hover:ring-offset-1`}
-                  />
+                } ${active ? "bg-slate-100 font-medium text-slate-700" : isHold ? "text-slate-600 hover:bg-slate-100" : "text-slate-600 hover:bg-slate-100"}`}>
+                  {/* color dot: fixed for hold, picker for others */}
+                  {isHold ? (
+                    <span className={`h-3 w-3 shrink-0 rounded-full ${p.color}`} title="保留（固定）" />
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPickerProjectId(pickerProjectId === p.id ? null : p.id); }}
+                      title="カラー・アイコンを変更"
+                      className={`h-3 w-3 shrink-0 rounded-full ${p.color} transition hover:ring-2 hover:ring-slate-300 hover:ring-offset-1`}
+                    />
+                  )}
                   {!collapsed && (
                     editingProjectId === p.id ? (
                       <input
@@ -507,13 +532,16 @@ export default function Sidebar({
                     ) : (
                       <button
                         onClick={() => onSelectProject(p.id)}
-                        onDoubleClick={() => { setEditingProjectId(p.id); setEditingProjectName(p.label); }}
+                        onDoubleClick={() => { if (!isHold) { setEditingProjectId(p.id); setEditingProjectName(p.label); } }}
                         className="flex min-w-0 flex-1 items-center text-left"
                       >
                         <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                        {isHold && !collapsed && (
+                          <span className="ml-1 text-[10px] text-slate-400">固定</span>
+                        )}
                         {projectCounts[p.id] ? (
                           <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"
+                            active ? "bg-slate-200 text-slate-700" : "bg-slate-100 text-slate-500"
                           }`}>{projectCounts[p.id]}</span>
                         ) : null}
                       </button>
@@ -524,30 +552,47 @@ export default function Sidebar({
                   )}
                 </div>
 
-                {/* Icon + Color picker popover */}
-                {pickerProjectId === p.id && !collapsed && (
+                {/* Delete button (hover) — hidden for hold */}
+                {!collapsed && onDeleteProject && !isHold && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteProjectId(p.id); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-300 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                    title="削除"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
+                {/* Color picker popover — not for hold */}
+                {pickerProjectId === p.id && !collapsed && !isHold && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setPickerProjectId(null)} />
-                    <div className="absolute left-8 top-0 z-20 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" style={{ width: 200 }}>
-                      <p className="mb-1.5 text-[10px] font-semibold text-slate-400">アイコン</p>
-                      <div className="mb-3 flex flex-wrap gap-1">
-                        {projectIconOptions.map((ic) => (
-                          <button key={ic} onClick={() => onUpdateProject(p.id, { icon: ic })}
-                            className={`flex h-7 w-7 items-center justify-center rounded-lg text-base transition hover:bg-slate-100 ${
-                              icon === ic ? "bg-blue-100 ring-2 ring-blue-400 ring-offset-1" : ""
-                            }`}>
-                            {ic}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="absolute left-8 top-0 z-20 rounded-xl border border-slate-200 bg-white p-3 shadow-lg" style={{ width: 160 }}>
                       <p className="mb-1.5 text-[10px] font-semibold text-slate-400">カラー</p>
                       <div className="flex flex-wrap gap-1.5">
                         {projectColorOptions.map((c) => (
-                          <button key={c} onClick={() => onUpdateProject(p.id, { color: c })}
+                          <button key={c} onClick={() => { onUpdateProject(p.id, { color: c }); setPickerProjectId(null); }}
                             className={`h-6 w-6 rounded-full ${c} transition hover:scale-110 ${
                               p.color === c ? "ring-2 ring-blue-400 ring-offset-1" : ""
                             }`} />
                         ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Delete confirm dialog */}
+                {confirmDeleteProjectId === p.id && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setConfirmDeleteProjectId(null)} />
+                    <div className="absolute left-0 right-0 top-full z-40 mx-2 mt-1 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                      <p className="mb-1 text-xs font-semibold text-slate-700">「{p.label}」を削除しますか？</p>
+                      <p className="mb-3 text-[11px] text-slate-400">このプロジェクトのタスクはプロジェクト未設定になります</p>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setConfirmDeleteProjectId(null)}
+                          className="rounded-lg px-3 py-1 text-xs text-slate-500 hover:bg-slate-100">キャンセル</button>
+                        <button onClick={() => { onDeleteProject?.(p.id); setConfirmDeleteProjectId(null); }}
+                          className="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white hover:bg-red-600">削除</button>
                       </div>
                     </div>
                   </>

@@ -13,6 +13,7 @@ interface Props {
   today: string;
   weekStart: number;
   monthOffset?: number;
+  selectedTaskId?: string;
   onSelect: (id: string) => void;
   onToggle?: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Task>) => void;
@@ -31,6 +32,7 @@ export default function CalendarView({
   today,
   weekStart,
   monthOffset = 0,
+  selectedTaskId,
   onSelect,
   onToggle,
   onUpdate,
@@ -169,6 +171,7 @@ export default function CalendarView({
                   <th className="px-3 py-2.5 text-left">タスク名</th>
                   <th className="w-36 px-3 py-2.5 text-left">担当者</th>
                   <th className="w-28 px-3 py-2.5 text-left">期日</th>
+                  <th className="w-6" />
                 </tr>
               </thead>
               <tbody>
@@ -181,10 +184,14 @@ export default function CalendarView({
                 )}
                 {[...selectedTasks.filter(t => !t.done), ...selectedTasks.filter(t => t.done)].map((t) => {
                   const stripe = t.color && t.color !== "none" ? taskColors[t.color]?.stripe : "";
+                  const isActive = t.id === selectedTaskId;
                   return (
                     <tr
                       key={t.id}
-                      className={`border-b border-slate-50 transition hover:bg-slate-50 ${t.done ? "opacity-60" : ""}`}
+                      onClick={() => onSelect(t.id)}
+                      className={`cursor-pointer border-b border-slate-50 transition ${
+                        t.done ? "opacity-60" : ""
+                      } ${isActive ? "bg-blue-50" : "hover:bg-slate-50"}`}
                     >
                       {/* Toggle */}
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
@@ -211,12 +218,11 @@ export default function CalendarView({
                           : (() => { const p = projects.find((p) => p.id === t.project); return p ? <span className="inline-flex items-center gap-1.5 text-slate-600"><span className={`h-2 w-2 rounded-full ${p.color}`} />{p.label}</span> : null; })()
                         }
                       </td>
-                      {/* Title — click opens notes panel */}
-                      <td className={`px-3 py-2.5 ${stripe ? `border-l-4 ${stripe}` : ""}`} onClick={(e) => e.stopPropagation()}>
-                        {onUpdate
-                          ? <EditableTitle task={t} onSave={(v) => onUpdate(t.id, { title: v })} onSelect={() => onSelect(t.id)} />
-                          : <span onClick={() => onSelect(t.id)} className={`cursor-pointer hover:underline ${t.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{t.title}</span>
-                        }
+                      {/* Title */}
+                      <td className={`px-3 py-2.5 ${stripe ? `border-l-4 ${stripe}` : ""}`}>
+                        <span className={`text-sm ${t.done ? "text-slate-400 line-through" : isActive ? "font-medium text-blue-700" : "text-slate-700"}`}>
+                          {t.title}
+                        </span>
                       </td>
                       {/* Owner */}
                       <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
@@ -231,6 +237,12 @@ export default function CalendarView({
                           ? <EditableDue task={t} today={today} onSave={(due, dueTime, repeat, repeatConfig) => onUpdate(t.id, { due, dueTime, repeat, repeatConfig })} />
                           : <span className="text-xs text-slate-500">{t.due}</span>
                         }
+                      </td>
+                      {/* Detail arrow */}
+                      <td className="pr-3 py-2.5">
+                        <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 transition ${isActive ? "text-blue-400" : "text-slate-200"}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m9 18 6-6-6-6"/>
+                        </svg>
                       </td>
                     </tr>
                   );

@@ -9,9 +9,17 @@ interface Props {
 
 const dotColor: Record<AppNotification["kind"], string> = {
   task: "bg-blue-500",
-  mention: "bg-violet-500",
-  system: "bg-slate-300",
+  system: "bg-slate-400",
 };
+
+function relativeTime(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return "たった今";
+  if (diff < 3600) return `${Math.floor(diff / 60)}分前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}時間前`;
+  if (diff < 86400 * 2) return "昨日";
+  return `${Math.floor(diff / 86400)}日前`;
+}
 
 export default function NotificationsPopover({
   notifications,
@@ -69,7 +77,7 @@ export default function NotificationsPopover({
                         {n.title}
                       </span>
                       <span className="shrink-0 text-xs text-slate-400">
-                        {n.time}
+                        {relativeTime(n.createdAt)}
                       </span>
                     </div>
                     <p className="truncate text-xs text-slate-500">{n.body}</p>

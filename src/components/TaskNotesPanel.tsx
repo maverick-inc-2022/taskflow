@@ -35,6 +35,7 @@ function Toolbar({ editorRef, cardRef, onAttachFile, onInsertCheckLine }: Toolba
   const [showLink, setShowLink]     = useState(false);
   const [linkUrl, setLinkUrl]       = useState("");
   const [linkPos, setLinkPos]       = useState({ top: 0, left: 0 });
+  const [blockType, setBlockType]   = useState("p");
   const savedRangeRef = useRef<Range | null>(null);
 
   const focus = () => editorRef.current?.focus();
@@ -42,6 +43,47 @@ function Toolbar({ editorRef, cardRef, onAttachFile, onInsertCheckLine }: Toolba
   const exec = (cmd: string, val?: string) => {
     focus();
     document.execCommand(cmd, false, val);
+  };
+
+  useEffect(() => {
+    const update = () => {
+      if (!editorRef.current) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+      while (node && node !== editorRef.current) {
+        if ((node as Element).tagName === "BLOCKQUOTE") { setBlockType("blockquote"); return; }
+        node = node.parentNode;
+      }
+      setBlockType("p");
+    };
+    document.addEventListener("selectionchange", update);
+    return () => document.removeEventListener("selectionchange", update);
+  }, [editorRef]);
+
+  const applyBlockFormat = (value: string) => {
+    focus();
+    if (value === "p") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+        while (node && node !== editorRef.current) {
+          if ((node as Element).tagName === "BLOCKQUOTE") {
+            const bq = node as Element;
+            const parent = bq.parentNode!;
+            const frag = document.createDocumentFragment();
+            while (bq.firstChild) frag.appendChild(bq.firstChild);
+            parent.replaceChild(frag, bq);
+            setBlockType("p");
+            return;
+          }
+          node = node.parentNode;
+        }
+      }
+      document.execCommand("formatBlock", false, "p");
+    } else {
+      document.execCommand("formatBlock", false, value);
+    }
   };
 
   const saveRange = () => {
@@ -81,7 +123,8 @@ function Toolbar({ editorRef, cardRef, onAttachFile, onInsertCheckLine }: Toolba
       {/* Block type */}
       <select
         onMouseDown={(e) => e.stopPropagation()}
-        onChange={(e) => { focus(); exec("formatBlock", e.target.value); }}
+        value={blockType}
+        onChange={(e) => applyBlockFormat(e.target.value)}
         className="rounded border border-slate-200 px-1 py-0.5 text-xs text-slate-600 bg-white"
       >
         <option value="p">本文</option>
@@ -186,9 +229,10 @@ interface StableEditorProps {
   onInput: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
 }
 
-const StableEditor = memo(function StableEditor({ editorRef, onInput, onKeyDown, onClick }: StableEditorProps) {
+const StableEditor = memo(function StableEditor({ editorRef, onInput, onKeyDown, onClick, onPaste }: StableEditorProps) {
   return (
     <div
       ref={editorRef}
@@ -197,6 +241,7 @@ const StableEditor = memo(function StableEditor({ editorRef, onInput, onKeyDown,
       onInput={onInput}
       onKeyDown={onKeyDown}
       onClick={onClick}
+      onPaste={onPaste}
       className="note-editor min-h-[220px] px-3 py-2 text-sm text-slate-700 outline-none focus:outline-none"
       data-placeholder="ここに入力…"
     />
@@ -287,9 +332,10 @@ interface MemoCardProps {
   index: number;
   onChange: (updated: NoteMemo) => void;
   onDelete: () => void;
+  onExpand: () => void;
 }
 
-function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
+function MemoCard({ memo, index: _index, onChange, onDelete, onExpand }: MemoCardProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -449,36 +495,76 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
   _onClickRef.current = handleEditorClick;
   const stableOnClick = useRef((e: React.MouseEvent<HTMLDivElement>) => _onClickRef.current(e)).current;
 
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text/plain").trim();
+    // If pasted text is purely a URL, insert it as a clickable <a> link
+    if (!/^https?:\/\/\S+$/.test(text)) return;
+    e.preventDefault();
+    const a = document.createElement("a");
+    a.href = text;
+    a.textContent = text;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(a);
+      range.setStartAfter(a);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editorRef.current?.appendChild(a);
+    }
+    onChange({ ...memo, html: editorRef.current?.innerHTML ?? "" });
+  }, [memo, onChange]);
+
+  const _onPasteRef = useRef(handlePaste);
+  _onPasteRef.current = handlePaste;
+  const stableOnPaste = useRef((e: React.ClipboardEvent<HTMLDivElement>) => _onPasteRef.current(e)).current;
+
   return (
     <div ref={cardRef} className="flex max-h-[70vh] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       {/* Card header — fixed inside card */}
       <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2">
         <span className="text-xs font-semibold text-slate-500">{memo.label}</span>
-        {confirmDelete ? (
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] text-slate-400">削除しますか？</span>
-            <button
-              onClick={onDelete}
-              className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-500 hover:bg-red-50 transition"
-            >
-              はい
-            </button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              className="rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 transition"
-            >
-              いいえ
-            </button>
-          </div>
-        ) : (
+        <div className="flex items-center gap-1">
+          {/* Expand button */}
           <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-slate-300 transition hover:text-red-400"
-            title="このメモを削除"
+            onClick={onExpand}
+            className="text-slate-300 transition hover:text-slate-500"
+            title="拡大表示"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
           </button>
-        )}
+          {confirmDelete ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-slate-400">削除しますか？</span>
+              <button
+                onClick={onDelete}
+                className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-500 hover:bg-red-50 transition"
+              >
+                はい
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-slate-100 transition"
+              >
+                いいえ
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-slate-300 transition hover:text-red-400"
+              title="このメモを削除"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Toolbar — fixed inside card */}
@@ -500,6 +586,7 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
           onInput={stableOnInput}
           onKeyDown={stableOnKeyDown}
           onClick={stableOnClick}
+          onPaste={stableOnPaste}
         />
 
       {/* Link preview popup */}
@@ -538,6 +625,175 @@ function MemoCard({ memo, index: _index, onChange, onDelete }: MemoCardProps) {
   );
 }
 
+// ── Expand modal ───────────────────────────────────────────────────────────
+
+interface ExpandModalProps {
+  memo: NoteMemo;
+  onChange: (updated: NoteMemo) => void;
+  onClose: () => void;
+}
+
+function NoteExpandModal({ memo, onChange, onClose }: ExpandModalProps) {
+  const editorRef  = useRef<HTMLDivElement>(null);
+  const cardRef    = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editorRef.current) editorRef.current.innerHTML = memo.html;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memo.id]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleInput = useCallback(() => {
+    onChange({ ...memo, html: editorRef.current?.innerHTML ?? "" });
+  }, [memo, onChange]);
+
+  const insertCheckLine = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const div = document.createElement("div");
+    div.className = "check-line";
+    const cb = document.createElement("span");
+    cb.className = "note-checkbox"; cb.contentEditable = "false";
+    cb.dataset.checked = "false"; cb.textContent = "☐";
+    const ts = document.createElement("span"); ts.className = "check-text";
+    div.appendChild(cb); div.appendChild(ts);
+    let blockNode: Node | null = range.startContainer;
+    while (blockNode && blockNode.parentNode !== editor) blockNode = blockNode.parentNode;
+    if (blockNode && blockNode !== editor) editor.insertBefore(div, blockNode.nextSibling);
+    else editor.appendChild(div);
+    const r = document.createRange();
+    r.setStart(ts, 0); r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+    onChange({ ...memo, html: editor.innerHTML });
+  }, [memo, onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    let checkLine: HTMLElement | null = null;
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLElement && node.classList.contains("check-line")) { checkLine = node; break; }
+      node = node.parentNode;
+    }
+    if (!checkLine) return;
+    e.preventDefault();
+    const lineText = (checkLine.textContent ?? "").replace(/[☐☑]/g, "").trim();
+    if (!lineText) {
+      const p = document.createElement("p"); p.innerHTML = "<br>";
+      checkLine.replaceWith(p);
+      const r = document.createRange(); r.setStart(p, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    } else {
+      const newLine = document.createElement("div"); newLine.className = "check-line";
+      const cb2 = document.createElement("span"); cb2.className = "note-checkbox";
+      cb2.contentEditable = "false"; cb2.dataset.checked = "false"; cb2.textContent = "☐";
+      const ts2 = document.createElement("span"); ts2.className = "check-text";
+      newLine.appendChild(cb2); newLine.appendChild(ts2);
+      checkLine.after(newLine);
+      const r = document.createRange(); r.setStart(ts2, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    onChange({ ...memo, html: editorRef.current?.innerHTML ?? "" });
+  }, [memo, onChange]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el.classList.contains("note-checkbox")) {
+      const checked = el.dataset.checked === "true";
+      el.dataset.checked = checked ? "false" : "true";
+      el.textContent = checked ? "☐" : "☑";
+      onChange({ ...memo, html: editorRef.current?.innerHTML ?? "" });
+      return;
+    }
+    const anchor = el.closest("a") as HTMLAnchorElement | null;
+    if (anchor?.href) { e.preventDefault(); window.open(anchor.href, "_blank", "noopener,noreferrer"); }
+  }, [memo, onChange]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text/plain").trim();
+    if (/^https?:\/\/\S+$/.test(text)) {
+      e.preventDefault();
+      const a = document.createElement("a");
+      a.href = text; a.textContent = text;
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents(); range.insertNode(a);
+        range.setStartAfter(a); range.collapse(true);
+        sel.removeAllRanges(); sel.addRange(range);
+      } else { editorRef.current?.appendChild(a); }
+      onChange({ ...memo, html: editorRef.current?.innerHTML ?? "" });
+    }
+  }, [memo, onChange]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-black/50 animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        ref={cardRef}
+        className="relative flex flex-col w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl animate-slide-up overflow-hidden"
+        style={{ maxHeight: "88vh" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 rounded-t-2xl">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span className="min-w-0 flex-1 text-sm font-semibold text-slate-700">{memo.label}</span>
+          <button
+            onClick={onClose}
+            className="rounded p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
+            title="閉じる (Esc)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <Toolbar
+          editorRef={editorRef}
+          cardRef={cardRef}
+          onAttachFile={() => fileInputRef.current?.click()}
+          onInsertCheckLine={insertCheckLine}
+        />
+        <input ref={fileInputRef} type="file" className="hidden" />
+
+        {/* Editor */}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          onClick={handleClick}
+          onPaste={handlePaste}
+          className="note-editor flex-1 overflow-y-auto px-5 py-4 text-sm text-slate-700 outline-none"
+          style={{ minHeight: "360px" }}
+          data-placeholder="ここに入力…"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Main panel ─────────────────────────────────────────────────────────────
 
 interface Props {
@@ -548,6 +804,7 @@ interface Props {
 
 export default function TaskNotesPanel({ task, onChangeMemos, onClose }: Props) {
   const memos: NoteMemo[] = task.memos?.length ? task.memos : [emptyMemo(0)];
+  const [expandedMemoIdx, setExpandedMemoIdx] = useState<number | null>(null);
 
   const updateMemo = (idx: number, updated: NoteMemo) => {
     const next = memos.map((m, i) => (i === idx ? updated : m));
@@ -587,6 +844,7 @@ export default function TaskNotesPanel({ task, onChangeMemos, onClose }: Props) 
             index={idx}
             onChange={(updated) => updateMemo(idx, updated)}
             onDelete={() => deleteMemo(idx)}
+            onExpand={() => setExpandedMemoIdx(idx)}
           />
         ))}
 
@@ -599,6 +857,15 @@ export default function TaskNotesPanel({ task, onChangeMemos, onClose }: Props) 
           メモを追加
         </button>
       </div>
+
+      {/* Expand modal */}
+      {expandedMemoIdx !== null && memos[expandedMemoIdx] && (
+        <NoteExpandModal
+          memo={memos[expandedMemoIdx]}
+          onChange={(updated) => updateMemo(expandedMemoIdx, updated)}
+          onClose={() => setExpandedMemoIdx(null)}
+        />
+      )}
     </div>
   );
 }

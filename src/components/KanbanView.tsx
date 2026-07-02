@@ -249,6 +249,7 @@ export default function KanbanView({
           {([
             { id: "date"    as GroupBy, label: "日付" },
             { id: "project" as GroupBy, label: "プロジェクト" },
+            { id: "owner"   as GroupBy, label: "担当者" },
           ]).map((opt) => (
             <button
               key={opt.id}

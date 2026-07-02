@@ -64,6 +64,16 @@ export default function GoogleCalendarPanel({ onAddTask, accessToken, onConnect,
   const [error, setError] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
+  const [nowHour, setNowHour] = useState(() => {
+    const d = new Date();
+    return d.getHours() + d.getMinutes() / 60;
+  });
+  useEffect(() => {
+    const tick = () => { const d = new Date(); setNowHour(d.getHours() + d.getMinutes() / 60); };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const load = useCallback(async (token: string) => {
     setLoading(true);
     setError(null);
@@ -238,6 +248,17 @@ export default function GoogleCalendarPanel({ onAddTask, accessToken, onConnect,
                   <div className="flex-1 border-t border-slate-100" />
                 </div>
               ))}
+
+              {/* Current time indicator */}
+              {nowHour >= startHour && nowHour <= endHour && (
+                <div
+                  className="pointer-events-none absolute right-0 z-10 flex items-center"
+                  style={{ top: (nowHour - startHour) * HOUR_PX, left: "2.75rem", transform: "translateY(-50%)" }}
+                >
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />
+                  <div className="flex-1 border-t-2 border-red-500" />
+                </div>
+              )}
 
               {/* Events */}
               {timedEvents.map((ev) => {

@@ -101,6 +101,14 @@ function TrashIcon() {
 function CheckIcon() {
   return <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m20 6-11 11-5-5"/></svg>;
 }
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+      <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+    </svg>
+  );
+}
 
 // ── MemoToolbar ───────────────────────────────────────────────────────────────
 
@@ -117,10 +125,52 @@ function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine, onAtt
   const [showLink,   setShowLink]   = useState(false);
   const [linkUrl,    setLinkUrl]    = useState("");
   const [linkPos,    setLinkPos]    = useState({ top: 0, left: 0 });
+  const [blockType,  setBlockType]  = useState("p");
   const savedRangeRef = useRef<Range | null>(null);
 
   const focus = () => editorRef.current?.focus();
   const exec  = (cmd: string, val?: string) => { focus(); document.execCommand(cmd, false, val); };
+
+  useEffect(() => {
+    const update = () => {
+      if (!editorRef.current) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+      while (node && node !== editorRef.current) {
+        if ((node as Element).tagName === "BLOCKQUOTE") { setBlockType("blockquote"); return; }
+        node = node.parentNode;
+      }
+      setBlockType("p");
+    };
+    document.addEventListener("selectionchange", update);
+    return () => document.removeEventListener("selectionchange", update);
+  }, [editorRef]);
+
+  const applyBlockFormat = (value: string) => {
+    focus();
+    if (value === "p") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node: Node | null = sel.getRangeAt(0).commonAncestorContainer;
+        while (node && node !== editorRef.current) {
+          if ((node as Element).tagName === "BLOCKQUOTE") {
+            const bq = node as Element;
+            const parent = bq.parentNode!;
+            const frag = document.createDocumentFragment();
+            while (bq.firstChild) frag.appendChild(bq.firstChild);
+            parent.replaceChild(frag, bq);
+            setBlockType("p");
+            return;
+          }
+          node = node.parentNode;
+        }
+      }
+      document.execCommand("formatBlock", false, "p");
+    } else {
+      document.execCommand("formatBlock", false, value);
+    }
+  };
 
   const saveRange = () => {
     const sel = window.getSelection();
@@ -144,7 +194,7 @@ function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine, onAtt
   const btn = (title: string, onClick: () => void, content: React.ReactNode) => (
     <button
       key={title}
-      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      onPointerDown={(e) => { e.preventDefault(); onClick(); }}
       title={title}
       className="flex h-6 min-w-[24px] items-center justify-center rounded px-1 text-slate-600 hover:bg-white/60 transition"
     >
@@ -158,8 +208,9 @@ function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine, onAtt
     <div className={`flex flex-wrap items-center gap-0.5 border-b ${borderClass} px-2 py-1`}>
       {/* Block type */}
       <select
-        onMouseDown={e => e.stopPropagation()}
-        onChange={e => { focus(); exec("formatBlock", e.target.value); }}
+        onPointerDown={e => e.stopPropagation()}
+        value={blockType}
+        onChange={e => applyBlockFormat(e.target.value)}
         className="rounded border border-slate-200 bg-white/70 px-1 py-0.5 text-[11px] text-slate-600"
       >
         <option value="p">本文</option>
@@ -244,7 +295,7 @@ function MemoToolbar({ editorRef, cardRef, borderClass, onInsertCheckLine, onAtt
               className="w-48 rounded border border-slate-200 px-2 py-1 text-xs outline-none focus:border-blue-400"
             />
             <button
-              onMouseDown={e => { e.preventDefault(); applyLink(); }}
+              onPointerDown={e => { e.preventDefault(); applyLink(); }}
               className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700"
             >追加</button>
           </div>
@@ -272,17 +323,20 @@ interface CardProps {
   onUpdate: (patch: Partial<StickyMemo>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onExpand: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver:  (e: React.DragEvent) => void;
   onDrop:      (e: React.DragEvent) => void;
   onDragEnd:   () => void;
+  onTouchDragStart?: () => void;
 }
 
 function MemoCard({
   memo, categories,
   isDragging, isDragOver,
-  onUpdate, onDelete, onDuplicate,
+  onUpdate, onDelete, onDuplicate, onExpand,
   onDragStart, onDragOver, onDrop, onDragEnd,
+  onTouchDragStart,
 }: CardProps) {
   const cardRef      = useRef<HTMLDivElement>(null);
   const editorRef    = useRef<HTMLDivElement>(null);
@@ -384,8 +438,29 @@ function MemoCard({
     onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
   }, [onUpdate]);
 
-  // Paste image from clipboard
+  // Paste: auto-link URLs, or embed images
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text/plain").trim();
+    if (/^https?:\/\/\S+$/.test(text)) {
+      e.preventDefault();
+      const a = document.createElement("a");
+      a.href = text;
+      a.textContent = text;
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(a);
+        range.setStartAfter(a);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorRef.current?.appendChild(a);
+      }
+      onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+      return;
+    }
     const items = Array.from(e.clipboardData?.items ?? []);
     const imgItem = items.find(it => it.type.startsWith("image/"));
     if (!imgItem) return;
@@ -434,7 +509,7 @@ function MemoCard({
           editorRef.current?.appendChild(img);
           onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
         } else {
-          const newFile = { id: `f${Date.now()}`, name: file.name, size: file.size, dataUrl: undefined };
+          const newFile = { id: `f${Date.now()}`, name: file.name, size: file.size, dataUrl };
           onUpdate({ files: [...(memo.files ?? []), newFile], updatedAt: Date.now() });
         }
       };
@@ -483,6 +558,7 @@ function MemoCard({
   return (
     <div
       ref={cardRef}
+      data-memo-id={memo.id}
       draggable={!isFocused}
       onDragStart={!isFocused ? onDragStart : undefined}
       onDragOver={onDragOver}
@@ -497,7 +573,11 @@ function MemoCard({
       {/* ── Header strip ── */}
       <div className={`flex items-center gap-1 rounded-t-2xl px-2 py-2 ${c.header}`}>
         {/* Drag grip */}
-        <span className={`shrink-0 cursor-grab opacity-0 transition group-hover:opacity-40 active:cursor-grabbing ${c.headerText}`} title="ドラッグして並び替え">
+        <span
+          className={`shrink-0 cursor-grab opacity-30 transition group-hover:opacity-60 sm:opacity-0 sm:group-hover:opacity-40 active:cursor-grabbing touch-none ${c.headerText}`}
+          title="ドラッグして並び替え"
+          onTouchStart={e => { e.stopPropagation(); onTouchDragStart?.(); }}
+        >
           <GripIcon />
         </span>
 
@@ -526,15 +606,16 @@ function MemoCard({
         </div>
 
         {/* Category badge */}
-        <div className="relative min-w-0 flex-1">
+        <div className="relative shrink-0">
           <button
             onClick={e => { e.stopPropagation(); setShowCategoryPicker(v => !v); setShowColorPicker(false); }}
             className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition hover:bg-white/20 ${c.headerText}`}
+            title="カテゴリ"
           >
             {category ? (
-              <span className="truncate">{category.name}</span>
+              <><span className={`h-2 w-2 rounded-full ${category.color}`} /><span className="hidden sm:inline truncate max-w-[80px]">{category.name}</span></>
             ) : (
-              <span className="opacity-50">カテゴリなし</span>
+              <span className="opacity-40 text-[10px]">≡</span>
             )}
           </button>
           {showCategoryPicker && (
@@ -564,6 +645,17 @@ function MemoCard({
           )}
         </div>
 
+        {/* Title input */}
+        <input
+          type="text"
+          value={memo.title ?? ""}
+          onChange={e => onUpdate({ title: e.target.value, updatedAt: Date.now() })}
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+          placeholder="タイトル"
+          className={`min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:opacity-40 ${c.headerText}`}
+        />
+
         {/* Pin button */}
         <button
           onClick={e => { e.stopPropagation(); onUpdate({ pinned: !memo.pinned, updatedAt: Date.now() }); }}
@@ -579,6 +671,9 @@ function MemoCard({
 
         {/* Hover actions */}
         <div className={`flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-80 ${c.headerText}`}>
+          <button onClick={e => { e.stopPropagation(); onExpand(); }} title="拡大表示" className="rounded p-1 hover:bg-white/20">
+            <ExpandIcon />
+          </button>
           <button onClick={handleCopy} title="コピー" className="rounded p-1 hover:bg-white/20">
             {copied ? <CheckIcon /> : <CopyIcon />}
           </button>
@@ -601,8 +696,8 @@ function MemoCard({
 
       {/* ── Editor area (focus-tracked wrapper) ── */}
       <div onFocus={handleFocusIn} onBlur={handleFocusOut}>
-        {/* Toolbar — visible when focused */}
-        {isFocused && (
+        {/* Toolbar — always visible on mobile, visible on desktop only when focused */}
+        <div className={isFocused ? "" : "block sm:hidden"}>
           <MemoToolbar
             editorRef={editorRef}
             cardRef={cardRef}
@@ -610,7 +705,7 @@ function MemoCard({
             onInsertCheckLine={insertCheckLine}
             onAttachFile={() => fileInputRef.current?.click()}
           />
-        )}
+        </div>
 
         {/* Rich text editor */}
         <div
@@ -680,7 +775,14 @@ function MemoCard({
               <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
-              <span className="max-w-[120px] truncate">{f.name}</span>
+              {f.dataUrl ? (
+                <a href={f.dataUrl} download={f.name} onClick={e => e.stopPropagation()}
+                  className="max-w-[120px] truncate hover:underline hover:text-blue-600">
+                  {f.name}
+                </a>
+              ) : (
+                <span className="max-w-[120px] truncate">{f.name}</span>
+              )}
               <button
                 onClick={() => onUpdate({ files: memo.files!.filter(x => x.id !== f.id), updatedAt: Date.now() })}
                 className="ml-0.5 text-slate-300 hover:text-red-400"
@@ -695,6 +797,206 @@ function MemoCard({
 
       {/* Hidden file input */}
       <input ref={fileInputRef} type="file" accept="*/*" multiple className="hidden" onChange={handleFileAttach} />
+    </div>
+  );
+}
+
+// ── MemoExpandModal ───────────────────────────────────────────────────────────
+
+interface ExpandModalProps {
+  memo: StickyMemo;
+  categories: MemoCategory[];
+  onUpdate: (patch: Partial<StickyMemo>) => void;
+  onClose: () => void;
+}
+
+function MemoExpandModal({ memo, categories, onUpdate, onClose }: ExpandModalProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const cardRef   = useRef<HTMLDivElement>(null);
+  const category  = categories.find(cat => cat.id === memo.categoryId);
+  const c         = getCardScheme(memo, category);
+
+  useEffect(() => {
+    if (editorRef.current) editorRef.current.innerHTML = memo.content;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memo.id]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleInput = useCallback(() => {
+    onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+  }, [onUpdate]);
+
+  const insertCheckLine = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const div = document.createElement("div");
+    div.className = "check-line";
+    const cb = document.createElement("span");
+    cb.className = "note-checkbox"; cb.contentEditable = "false";
+    cb.dataset.checked = "false"; cb.textContent = "☐";
+    const textSpan = document.createElement("span");
+    textSpan.className = "check-text";
+    div.appendChild(cb); div.appendChild(textSpan);
+    let blockNode: Node | null = range.startContainer;
+    while (blockNode && blockNode.parentNode !== editor) blockNode = blockNode.parentNode;
+    if (blockNode && blockNode !== editor) editor.insertBefore(div, blockNode.nextSibling);
+    else editor.appendChild(div);
+    const r = document.createRange();
+    r.setStart(textSpan, 0); r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+    onUpdate({ content: editor.innerHTML, updatedAt: Date.now() });
+  }, [onUpdate]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    let checkLine: HTMLElement | null = null;
+    while (node && node !== editorRef.current) {
+      if (node instanceof HTMLElement && node.classList.contains("check-line")) { checkLine = node; break; }
+      node = node.parentNode;
+    }
+    if (!checkLine) return;
+    e.preventDefault();
+    const lineText = (checkLine.textContent ?? "").replace(/[☐☑]/g, "").trim();
+    if (!lineText) {
+      const p = document.createElement("p"); p.innerHTML = "<br>";
+      checkLine.replaceWith(p);
+      const r = document.createRange(); r.setStart(p, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    } else {
+      const newLine = document.createElement("div"); newLine.className = "check-line";
+      const cb2 = document.createElement("span"); cb2.className = "note-checkbox";
+      cb2.contentEditable = "false"; cb2.dataset.checked = "false"; cb2.textContent = "☐";
+      const ts2 = document.createElement("span"); ts2.className = "check-text";
+      newLine.appendChild(cb2); newLine.appendChild(ts2);
+      checkLine.after(newLine);
+      const r = document.createRange(); r.setStart(ts2, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+  }, [onUpdate]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el.classList.contains("note-checkbox")) {
+      const checked = el.dataset.checked === "true";
+      el.dataset.checked = checked ? "false" : "true";
+      el.textContent = checked ? "☐" : "☑";
+      onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+      return;
+    }
+    const anchor = el.closest("a") as HTMLAnchorElement | null;
+    if (anchor?.href) { e.preventDefault(); window.open(anchor.href, "_blank", "noopener,noreferrer"); }
+  }, [onUpdate]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text/plain").trim();
+    if (/^https?:\/\/\S+$/.test(text)) {
+      e.preventDefault();
+      const a = document.createElement("a");
+      a.href = text;
+      a.textContent = text;
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(a);
+        range.setStartAfter(a);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editorRef.current?.appendChild(a);
+      }
+      onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+      return;
+    }
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imgItem = items.find(it => it.type.startsWith("image/"));
+    if (!imgItem) return;
+    e.preventDefault();
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const img = document.createElement("img");
+      img.src = evt.target?.result as string;
+      img.style.maxWidth = "100%"; img.style.width = "480px"; img.className = "memo-image";
+      editorRef.current?.appendChild(img);
+      onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
+    };
+    reader.readAsDataURL(file);
+  }, [onUpdate]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-black/50 animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        ref={cardRef}
+        className={`relative flex flex-col w-full max-w-3xl rounded-2xl border shadow-2xl animate-slide-up overflow-hidden ${c.body} ${c.border}`}
+        style={{ maxHeight: "88vh" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className={`flex items-center gap-2 px-4 py-3 ${c.header}`}>
+          <input
+            type="text"
+            value={memo.title ?? ""}
+            onChange={e => onUpdate({ title: e.target.value, updatedAt: Date.now() })}
+            placeholder="タイトル"
+            className={`min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:opacity-40 ${c.headerText}`}
+          />
+          <span className={`shrink-0 text-xs opacity-60 ${c.headerText}`}>
+            更新: {fmtDate(memo.updatedAt)}
+          </span>
+          <button
+            onClick={onClose}
+            className={`shrink-0 rounded p-1.5 transition hover:bg-white/20 ${c.headerText}`}
+            title="閉じる (Esc)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <MemoToolbar
+          editorRef={editorRef}
+          cardRef={cardRef}
+          borderClass={c.border}
+          onInsertCheckLine={insertCheckLine}
+          onAttachFile={() => {}}
+        />
+
+        {/* Editor */}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          onClick={handleClick}
+          onPaste={handlePaste}
+          className="note-editor flex-1 overflow-y-auto px-5 py-4 text-sm text-slate-700 outline-none"
+          style={{ minHeight: "320px" }}
+          data-placeholder="ここに入力..."
+        />
+      </div>
     </div>
   );
 }
@@ -716,9 +1018,12 @@ export default function MemoView({
   onUpdateMemo, onDeleteMemo, onDuplicateMemo, onReorderMemo,
 }: Props) {
   const [search, setSearch] = useState("");
+  const [expandedMemoId, setExpandedMemoId] = useState<string | null>(null);
   const [dragId,      setDragId]      = useState<string | null>(null);
   const [dragOverId,  setDragOverId]  = useState<string | null>(null);
   const [dragSection, setDragSection] = useState<"pinned" | "regular" | null>(null);
+  const [touchDragId,      setTouchDragId]      = useState<string | null>(null);
+  const [touchDragOverId,  setTouchDragOverId]  = useState<string | null>(null);
 
   const filtered = memos.filter(m => {
     if (filterCategoryId !== null && m.categoryId !== filterCategoryId) return false;
@@ -753,6 +1058,35 @@ export default function MemoView({
   };
   const handleDragEnd = () => { setDragId(null); setDragOverId(null); setDragSection(null); };
 
+  const handleTouchDragStart = useCallback((id: string) => {
+    setTouchDragId(id);
+  }, []);
+
+  useEffect(() => {
+    if (!touchDragId) return;
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const card = el?.closest('[data-memo-id]');
+      const targetId = card?.getAttribute('data-memo-id') ?? null;
+      setTouchDragOverId(targetId !== touchDragId ? targetId : null);
+    };
+    const onTouchEnd = () => {
+      if (touchDragId && touchDragOverId) {
+        onReorderMemo(touchDragId, touchDragOverId);
+      }
+      setTouchDragId(null);
+      setTouchDragOverId(null);
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [touchDragId, touchDragOverId, onReorderMemo]);
+
   const renderSection = (list: StickyMemo[], section: "pinned" | "regular") => (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 items-start">
       {list.map(memo => (
@@ -760,15 +1094,17 @@ export default function MemoView({
           key={memo.id}
           memo={memo}
           categories={categories}
-          isDragging={dragId === memo.id}
-          isDragOver={dragOverId === memo.id}
+          isDragging={dragId === memo.id || touchDragId === memo.id}
+          isDragOver={dragOverId === memo.id || touchDragOverId === memo.id}
           onUpdate={patch => onUpdateMemo(memo.id, patch)}
           onDelete={() => onDeleteMemo(memo.id)}
           onDuplicate={() => onDuplicateMemo(memo.id)}
+          onExpand={() => setExpandedMemoId(memo.id)}
           onDragStart={e => handleDragStart(e, memo.id, section)}
           onDragOver={e => handleDragOver(e, memo.id, section)}
           onDrop={e => handleDrop(e, memo.id, section)}
           onDragEnd={handleDragEnd}
+          onTouchDragStart={() => handleTouchDragStart(memo.id)}
         />
       ))}
     </div>
@@ -813,6 +1149,20 @@ export default function MemoView({
           {regularMemos.length > 0 && renderSection(regularMemos, "regular")}
         </>
       )}
+
+      {/* Expand modal */}
+      {expandedMemoId && (() => {
+        const m = memos.find(x => x.id === expandedMemoId);
+        if (!m) return null;
+        return (
+          <MemoExpandModal
+            memo={m}
+            categories={categories}
+            onUpdate={patch => onUpdateMemo(m.id, patch)}
+            onClose={() => setExpandedMemoId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

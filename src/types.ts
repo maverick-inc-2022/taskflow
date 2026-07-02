@@ -12,7 +12,7 @@ export interface Task {
   due: string;
   /** Optional clock time shown after the date, e.g. "10:00" */
   dueTime?: string;
-  priority: Priority;
+  priority?: Priority;
   done: boolean;
   starred: boolean;
   /** Free-form memo shown in the detail panel */
@@ -107,10 +107,10 @@ export interface AppNotification {
   id: string;
   title: string;
   body: string;
-  time: string;
+  createdAt: number;
   read: boolean;
-  /** dot color */
-  kind: "task" | "mention" | "system";
+  kind: "task" | "system";
+  taskId?: string;
 }
 
 export interface Profile {
@@ -130,6 +130,8 @@ export interface Settings {
   fontSize: FontSize;
   defaultView: LayoutMode;
   defaultDateRange: "today" | "week" | "month" | "all";
+  lineUserId?: string;
+  lineNotifyDays?: number; // 0=当日, 1=前日, 2=2日前, ...
 }
 
 export type AccentColor = "blue" | "violet" | "emerald" | "rose" | "amber";
@@ -184,6 +186,7 @@ export interface MemoCategory {
 export interface StickyMemo {
   id: string;
   categoryId?: string;
+  title?: string;
   /** Rich HTML from contentEditable */
   content: string;
   /** Color key: "yellow" | "blue" | "green" | "pink" | "purple" | "orange" | "white" */

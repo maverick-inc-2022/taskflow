@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { avatarChoices } from "../data";
 import type { Profile } from "../types";
 import Modal from "./Modal";
@@ -264,24 +264,30 @@ export default function ProfileModal({ profile, isLoggedIn, needsPasswordChange,
     onClose();
   };
   const handleLogout = () => { onLogout(); onClose(); };
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result as string;
+      setDraft(d => ({ ...d, avatar: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   return (
     <Modal title="プロフィール" onClose={onClose}>
       <div className="mb-5 flex flex-col items-center">
-        <div className="relative">
+        <div className="relative cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
           <img src={draft.avatar} alt="avatar" className="h-20 w-20 rounded-full border border-slate-200 object-cover" />
-          <span className="absolute -bottom-1 -right-1 rounded-full bg-blue-600 p-1.5 text-white">
+          <span className="absolute -bottom-1 -right-1 rounded-full bg-blue-600 p-1.5 text-white hover:bg-blue-700 transition">
             <CameraIcon className="h-4 w-4" />
           </span>
         </div>
-        <div className="mt-3 flex gap-2">
-          {avatarChoices.map((a) => (
-            <button key={a} onClick={() => setDraft({ ...draft, avatar: a })}
-              className={`h-9 w-9 overflow-hidden rounded-full ring-2 transition ${draft.avatar === a ? "ring-blue-500" : "ring-transparent"}`}>
-              <img src={a} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
+        <p className="mt-2 text-[11px] text-slate-400">クリックして写真をアップロード</p>
+        <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
       </div>
       <label className="mb-3 block">
         <span className="mb-1 block text-sm font-medium text-slate-600">名前</span>

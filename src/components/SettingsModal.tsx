@@ -383,6 +383,52 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
             </button>
           )}
         </div>
+        {/* LINE */}
+        <div className="py-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-6 w-6 shrink-0 rounded-md bg-[#06C755] flex items-center justify-center">
+              <svg viewBox="0 0 36 36" className="h-4 w-4 fill-white">
+                <path d="M18 3C9.716 3 3 8.832 3 16.084c0 6.51 5.776 11.952 13.574 13.028.529.115 1.249.351 1.431.806.164.413.107 1.058.053 1.475l-.233 1.393c-.071.413-.327 1.618 1.418.883 1.745-.736 9.409-5.541 12.835-9.489C34.498 21.567 33 18.98 33 16.084 33 8.832 26.284 3 18 3z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700">LINE 通知</p>
+              <p className="text-xs text-slate-400">期限が近いタスクをLINEで通知する</p>
+            </div>
+            {settings.lineUserId && (
+              <span className="ml-auto rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600">設定済み</span>
+            )}
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-500 mb-3">
+            <p className="font-semibold text-slate-600 mb-1">設定手順</p>
+            <ol className="list-decimal ml-3.5 space-y-0.5">
+              <li>LINEで <span className="font-mono font-semibold text-slate-700">@544neoue</span>（task通知）を友達追加</li>
+              <li>任意のメッセージを送信する</li>
+              <li>返信されたUser IDをコピーして下に貼り付け</li>
+            </ol>
+          </div>
+          <input
+            value={settings.lineUserId ?? ""}
+            onChange={e => set({ lineUserId: e.target.value })}
+            placeholder="LINE User ID（例: U1a2b3c4d5e6f...）"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono outline-none focus:border-[#06C755] focus:ring-2 focus:ring-[#06C755]/20"
+          />
+          {settings.lineUserId && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-slate-500">通知タイミング</span>
+              <select
+                value={settings.lineNotifyDays ?? 1}
+                onChange={e => set({ lineNotifyDays: Number(e.target.value) })}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-[#06C755]"
+              >
+                <option value={0}>当日朝に通知</option>
+                <option value={1}>前日に通知</option>
+                <option value={2}>2日前に通知</option>
+                <option value={3}>3日前に通知</option>
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {userEmail && (

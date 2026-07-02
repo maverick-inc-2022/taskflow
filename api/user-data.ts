@@ -8,7 +8,17 @@ function getClient() {
   );
 }
 
+function authorized(req: VercelRequest): boolean {
+  const secret = process.env.API_SECRET;
+  if (!secret) return true; // not configured — allow (dev mode)
+  return req.headers["x-api-secret"] === secret;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!authorized(req)) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
   const supabase = getClient();
 
   if (req.method === "GET") {

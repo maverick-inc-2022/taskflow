@@ -140,23 +140,27 @@ export default function AddTaskModal({ onClose, onAdd, projects, people = [], on
           </div>
 
           {/* 期限 + 時刻 */}
-          <div className={rowClass}>
-            <CalIcon />
-            <input
-              type="date"
-              value={due}
-              onChange={(e) => setDue(e.target.value)}
-              className={inputClass}
-              style={{ colorScheme: "light" }}
-            />
-            <ClockIcon />
-            <input
-              type="time"
-              value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
-              className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none"
-              style={{ colorScheme: "light" }}
-            />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3">
+            <div className="flex min-w-[150px] items-center gap-3" style={{ flex: "1 1 150px" }}>
+              <CalIcon />
+              <input
+                type="date"
+                value={due}
+                onChange={(e) => setDue(e.target.value)}
+                className={inputClass}
+                style={{ colorScheme: "light" }}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <ClockIcon />
+              <input
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+                className="w-24 border-0 bg-transparent text-sm text-slate-700 outline-none"
+                style={{ colorScheme: "light" }}
+              />
+            </div>
           </div>
 
           {/* 繰り返し */}

@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
 import { AvatarDisplay } from "./avatarIcons";
 import Sidebar, { type View } from "./components/Sidebar";
 import TaskItem from "./components/TaskItem";
@@ -30,6 +31,7 @@ import {
   initialTasks,
   people as defaultPeople,
   avatarChoices,
+  HOLD_PROJECT_ID,
   TODAY,
 } from "./data";
 import type {
@@ -124,26 +126,119 @@ function tasksForView(
   view: View,
   selectedProject: ProjectId | null,
 ): Task[] {
-  if (view === "favorites") return tasks.filter((t) => t.starred);
-  if (view === "completed") return tasks.filter((t) => t.done);
+  // 保留プロジェクトビューはそのまま全表示
+  if (view === "project" && selectedProject === HOLD_PROJECT_ID)
+    return tasks.filter((t) => t.project === HOLD_PROJECT_ID);
+
+  // 他のビューでは保留タスクを除外
+  const nonHold = tasks.filter((t) => t.project !== HOLD_PROJECT_ID);
+
+  if (view === "favorites") return nonHold.filter((t) => t.starred);
+  if (view === "completed") return nonHold.filter((t) => t.done);
   if (view === "repeat")
-    return tasks.filter((t) => t.repeat && t.repeat !== "none" && !t.done);
+    return nonHold.filter((t) => t.repeat && t.repeat !== "none" && !t.done);
   if (view === "project")
-    return tasks.filter((t) => t.project === selectedProject);
-  if (view === "all" || view === "today") return tasks;
+    return nonHold.filter((t) => t.project === selectedProject);
+  if (view === "all" || view === "today") return nonHold;
   const t = new Date(TODAY + "T00:00:00");
   const horizon = new Date(t);
   if (view === "week") horizon.setDate(t.getDate() + 6);
-  else horizon.setMonth(t.getMonth() + 1, 0); // end of this month
-  const max = fmtDate(horizon); // local date — avoid UTC off-by-one
-  return tasks.filter((task) => task.due <= max);
+  else horizon.setMonth(t.getMonth() + 1, 0);
+  const max = fmtDate(horizon);
+  return nonHold.filter((task) => task.due <= max);
 }
 
+interface GoogleUser { name: string; email: string; picture: string; }
+
 export default function App() {
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => {
+    try { const s = localStorage.getItem('taskflow_google_user'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
+  const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
+
+  const handleGoogleSuccess = useCallback(async (accessToken: string) => {
+    setGoogleLoginLoading(true);
+    setGoogleLoginError(null);
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const info = await res.json() as { name: string; email: string; picture: string };
+      const user: GoogleUser = { name: info.name, email: info.email, picture: info.picture };
+      setGoogleUser(user);
+      localStorage.setItem('taskflow_google_user', JSON.stringify(user));
+    } catch {
+      setGoogleLoginError('ユーザー情報の取得に失敗しました');
+    } finally {
+      setGoogleLoginLoading(false);
+    }
+  }, []);
+
+  const googleLogin = useGoogleLogin({
+    scope: 'openid email profile',
+    onSuccess: (res) => handleGoogleSuccess(res.access_token),
+    onError: () => setGoogleLoginError('Googleログインに失敗しました'),
+  });
+
+  const handleGoogleLogout = () => {
+    setGoogleUser(null);
+    localStorage.removeItem('taskflow_google_user');
+  };
+
+  const hasClientId = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (hasClientId && !googleUser) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-xl text-center">
+          <div className="mb-6">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 shadow-lg">
+              <svg viewBox="0 0 24 24" className="h-8 w-8 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-slate-800">Taskflow</h1>
+            <p className="mt-1 text-sm text-slate-500">社内タスク管理</p>
+          </div>
+          <button
+            onClick={() => { setGoogleLoginError(null); googleLogin(); }}
+            disabled={googleLoginLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-60"
+          >
+            {googleLoginLoading ? (
+              <svg className="h-5 w-5 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+            )}
+            {googleLoginLoading ? 'ログイン中...' : 'Googleでサインイン'}
+          </button>
+          {googleLoginError && (
+            <p className="mt-3 text-xs text-red-500">{googleLoginError}</p>
+          )}
+          <p className="mt-5 text-[11px] text-slate-400">
+            会社のGoogleアカウントでのみログインできます
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <AppInner onGoogleLogout={handleGoogleLogout} googleUser={googleUser} />;
+}
+
+function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; googleUser: GoogleUser | null }) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     let restored = initialTasks;
     try {
-      const s = localStorage.getItem('taskflow_tasks');
+      const s = localStorage.getItem('taskflow_tasks_v2');
       if (s) restored = JSON.parse(s) as Task[];
     } catch {}
     seedCounters(restored);
@@ -165,7 +260,7 @@ export default function App() {
   const [sortMode, setSortMode] = useState<SortMode>("date");
   const [sortOpen, setSortOpen] = useState(false);
   // sort mode for active task lists
-  type ListSort = "date" | "project" | "custom";
+  type ListSort = "date" | "project" | "owner" | "custom";
   const [listSort, setListSort] = useState<ListSort>("date");
   const [listSortOpen, setListSortOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectId | null>(null);
@@ -173,6 +268,7 @@ export default function App() {
   // multi-select
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [completedDeleteConfirm, setCompletedDeleteConfirm] = useState(false);
   const selectionActive = selectedIds.length > 0;
 
   // drag & drop
@@ -186,7 +282,9 @@ export default function App() {
   const [draftMemos, setDraftMemos] = useState<import("./types").NoteMemo[]>([]);
 
   // resizable right column
-  const [rightWidth, setRightWidth] = useState(420);
+  const [rightWidth, setRightWidth] = useState(() =>
+    Math.min(Math.max(Math.round(window.innerWidth * 0.32), 360), 580)
+  );
   const [rightOpen, setRightOpen] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -272,7 +370,12 @@ export default function App() {
     } catch {}
     return [];
   });
-  const [profile, setProfile] = useState<Profile>(defaultProfile);
+  const [profile, setProfile] = useState<Profile>(() => ({
+    name: googleUser?.name ?? defaultProfile.name,
+    email: googleUser?.email ?? defaultProfile.email,
+    avatar: googleUser?.picture ?? defaultProfile.avatar,
+    role: "",
+  }));
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(() =>
@@ -306,12 +409,26 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `taskflow_tasks_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `taskflow_tasks_v2_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
-  const [googleCalToken, setGoogleCalToken] = useState<string | null>(null);
-  const [gmailToken, setGmailToken] = useState<string | null>(null);
+  const [googleCalToken, setGoogleCalTokenRaw] = useState<string | null>(() =>
+    localStorage.getItem('taskflow_gcal_token')
+  );
+  const setGoogleCalToken = (token: string | null) => {
+    setGoogleCalTokenRaw(token);
+    if (token) localStorage.setItem('taskflow_gcal_token', token);
+    else localStorage.removeItem('taskflow_gcal_token');
+  };
+  const [gmailToken, setGmailTokenRaw] = useState<string | null>(() =>
+    localStorage.getItem('taskflow_gmail_token')
+  );
+  const setGmailToken = (token: string | null) => {
+    setGmailTokenRaw(token);
+    if (token) localStorage.setItem('taskflow_gmail_token', token);
+    else localStorage.removeItem('taskflow_gmail_token');
+  };
   const [slackConnected, setSlackConnected] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -320,8 +437,13 @@ export default function App() {
     } catch {}
     return defaultSettings;
   });
-  const [notifications, setNotifications] =
-    useState<AppNotification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const s = localStorage.getItem('taskflow_notifications');
+      if (s) return JSON.parse(s) as AppNotification[];
+    } catch {}
+    return [];
+  });
   const [activeModal, setActiveModal] = useState<
     "settings" | "help" | "profile" | null
   >(null);
@@ -329,12 +451,82 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const addNotif = useCallback((
+    title: string, body: string, kind: AppNotification["kind"], taskId?: string
+  ) => {
+    setNotifications(prev => {
+      // avoid duplicate for same taskId + body within the same day
+      if (taskId && prev.some(n =>
+        n.taskId === taskId && n.body === body &&
+        new Date(n.createdAt).toDateString() === new Date().toDateString()
+      )) return prev;
+      const notif: AppNotification = { id: `n_${Date.now()}_${Math.random()}`, title, body, createdAt: Date.now(), read: false, kind, taskId };
+      return [notif, ...prev].slice(0, 40);
+    });
+  }, []);
+
+  // Track which task IDs already generated due-date/time notifications today
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  // Check due-date notifications whenever tasks change
+  useEffect(() => {
+    const today = TODAY;
+    const tomorrow = (() => { const d = new Date(today + "T00:00:00"); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
+    for (const t of tasks) {
+      if (t.done) continue;
+      if (t.due === today && !notifiedRef.current.has(`due:${t.id}`)) {
+        notifiedRef.current.add(`due:${t.id}`);
+        addNotif(t.title, "今日が期限のタスクです", "task", t.id);
+      }
+      if (t.due === tomorrow && !notifiedRef.current.has(`tmr:${t.id}`)) {
+        notifiedRef.current.add(`tmr:${t.id}`);
+        addNotif(t.title, "明日が期限のタスクです", "task", t.id);
+      }
+      if (t.due && t.due < today && !notifiedRef.current.has(`ovr:${t.id}`)) {
+        notifiedRef.current.add(`ovr:${t.id}`);
+        addNotif(t.title, "期限が過ぎています", "task", t.id);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
+  // Check due-time notifications every minute
+  useEffect(() => {
+    const check = () => {
+      const today = TODAY;
+      const now = new Date();
+      for (const t of tasks) {
+        if (t.done || !t.dueTime || t.due !== today) continue;
+        const key = `time:${t.id}`;
+        if (notifiedRef.current.has(key)) continue;
+        const [hh, mm] = t.dueTime.split(":").map(Number);
+        const dueTime = new Date(today + "T00:00:00");
+        dueTime.setHours(hh, mm, 0, 0);
+        const diffMin = (dueTime.getTime() - now.getTime()) / 60000;
+        if (diffMin <= 15 && diffMin > -60) {
+          notifiedRef.current.add(key);
+          const msg = diffMin > 0 ? `${Math.round(diffMin)}分後が期限です（${t.dueTime}）` : `期限の時刻になりました（${t.dueTime}）`;
+          addNotif(t.title, msg, "task", t.id);
+        }
+      }
+    };
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
+  // Persist notifications to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('taskflow_notifications', JSON.stringify(notifications)); } catch {}
+  }, [notifications]);
+
   const safeSetItem = (key: string, value: unknown) => {
     try { localStorage.setItem(key, JSON.stringify(value)); }
     catch { /* quota exceeded or storage unavailable — keep running in-memory */ }
   };
   useEffect(() => { safeSetItem('taskflow_settings', settings); }, [settings]);
-  useEffect(() => { safeSetItem('taskflow_tasks',    tasks);    }, [tasks]);
+  useEffect(() => { safeSetItem('taskflow_tasks_v2',    tasks);    }, [tasks]);
   useEffect(() => { safeSetItem('taskflow_memos',    memos);    }, [memos]);
   useEffect(() => { safeSetItem('taskflow_trash',    trash);    }, [trash]);
 
@@ -345,40 +537,100 @@ export default function App() {
   // local state can't overwrite real cloud data on a fresh device.
   const cloudHydratedRef = useRef(false);
 
+  const apiHeaders = (): Record<string, string> => {
+    const secret = import.meta.env.VITE_API_SECRET as string | undefined;
+    return secret ? { "x-api-secret": secret } : {};
+  };
+
   const loadFromCloud = async (email: string) => {
     try {
-      const res = await fetch(`/api/user-data?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/user-data?email=${encodeURIComponent(email)}`, {
+        headers: apiHeaders(),
+      });
       if (!res.ok) return;
-      const data = await res.json() as { tasks: Task[]; memos: StickyMemo[]; settings: Settings } | null;
+      const data = await res.json() as {
+        tasks: Task[];
+        memos: StickyMemo[];
+        settings: Settings & {
+          _profile?: Profile;
+          _people?: Person[];
+          _projects?: Project[];
+          _memoCategories?: MemoCategory[];
+          _trash?: Task[];
+        };
+      } | null;
       if (!data) return;
-      if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks', JSON.stringify(data.tasks)); }
+      if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
       if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
-      if (data.settings) { setSettings(s => ({ ...s, ...data.settings })); }
+      if (data.settings) {
+        const { _profile, _people, _projects, _memoCategories, _trash, ...actualSettings } = data.settings;
+        setSettings(s => ({ ...s, ...actualSettings }));
+        if (_profile) setProfile(_profile);
+        if (_people) setPeople(applyGoogleUserToMe(_people));
+        if (_projects) {
+          // Deduplicate by id (guard against double-save bugs)
+          const seen = new Set<string>();
+          const deduped = _projects.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+          // 保留プロジェクトは常に末尾に保持し、色・ラベル・アイコンを固定値に上書き
+          const holdDef = defaultProjects.find(p => p.id === HOLD_PROJECT_ID)!;
+          const holdIdx = deduped.findIndex(p => p.id === HOLD_PROJECT_ID);
+          if (holdIdx >= 0) {
+            deduped[holdIdx] = { ...deduped[holdIdx], color: holdDef.color, label: holdDef.label, icon: holdDef.icon };
+          } else {
+            deduped.push(holdDef);
+          }
+          setProjects(deduped);
+        }
+        if (_memoCategories) setMemoCategories(_memoCategories);
+        if (_trash) { setTrash(_trash); localStorage.setItem('taskflow_trash', JSON.stringify(_trash)); }
+      }
     } catch { /* network error, use local data */ }
     finally { cloudHydratedRef.current = true; }
   };
 
-  const saveToCloud = async (email: string) => {
+  const saveToCloud = async (
+    email: string,
+    snapshot: {
+      tasks: Task[]; memos: StickyMemo[]; settings: Settings;
+      profile: Profile; people: Person[]; projects: Project[];
+      memoCategories: MemoCategory[]; trash: Task[];
+    }
+  ) => {
     setSyncStatus("saving");
     try {
       const res = await fetch("/api/user-data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, tasks, memos, settings }),
+        headers: { "Content-Type": "application/json", ...apiHeaders() },
+        body: JSON.stringify({
+          email,
+          tasks: snapshot.tasks,
+          memos: snapshot.memos,
+          settings: {
+            ...snapshot.settings,
+            _profile: snapshot.profile,
+            _people: snapshot.people,
+            _projects: snapshot.projects,
+            _memoCategories: snapshot.memoCategories,
+            _trash: snapshot.trash,
+          },
+        }),
       });
       setSyncStatus(res.ok ? "saved" : "error");
       setTimeout(() => setSyncStatus("idle"), 2000);
     } catch { setSyncStatus("error"); setTimeout(() => setSyncStatus("idle"), 2000); }
   };
 
+  // Auto-connect cloud sync using Google account email on mount
   useEffect(() => {
-    if (!syncedEmail) return;
-    // Don't save back until the first cloud load completed (avoids clobbering
-    // cloud data with empty local state right after login).
-    if (!cloudHydratedRef.current) return;
-    const t = setTimeout(() => saveToCloud(syncedEmail), 2000);
-    return () => clearTimeout(t);
-  }, [tasks, memos, settings, syncedEmail]);
+    if (googleUser?.email) {
+      cloudHydratedRef.current = false;
+      setSyncedEmail(googleUser.email);
+      loadFromCloud(googleUser.email);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // auto-save useEffect is placed after all state declarations (see below)
 
   useEffect(() => {
     if (needsPasswordChange) setActiveModal("profile");
@@ -396,6 +648,14 @@ export default function App() {
     setIsLoggedIn(false);
     setNeedsPasswordChange(false);
     setSyncedEmail(null);
+    // Wipe local cache so the next account cannot see this account's data
+    const keysToRemove = [
+      'taskflow_tasks_v2', 'taskflow_memos', 'taskflow_settings',
+      'taskflow_trash', 'taskflow_banner_dismissed',
+      'taskflow_gcal_token', 'taskflow_gmail_token',
+    ];
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    onGoogleLogout();
   };
   const handleChangePassword = (current: string, next: string): string | null => {
     const account = (() => { try { const s = localStorage.getItem('taskflow_account'); return s ? JSON.parse(s) : null; } catch { return null; } })();
@@ -404,8 +664,14 @@ export default function App() {
     return null;
   };
 
+  const applyGoogleUserToMe = (list: Person[]): Person[] =>
+    list.map(p => p.id === "me" && googleUser
+      ? { ...p, name: `${googleUser.name}（自分）`, avatar: googleUser.picture }
+      : p
+    );
+
   // People (stateful for adding/removing members)
-  const [people, setPeople] = useState<Person[]>(defaultPeople);
+  const [people, setPeople] = useState<Person[]>(() => applyGoogleUserToMe(defaultPeople));
   let nextPersonId = 200;
   const addPerson = (name: string, avatar: string) => {
     const id = `person${nextPersonId++}`;
@@ -421,18 +687,46 @@ export default function App() {
 
   // Projects (stateful for color editing + adding new)
   const [projects, setProjects] = useState<Project[]>(defaultProjects);
-  let nextProjectId = 100;
   const addProject = (label: string, color: string, icon: string) => {
-    const id = `proj${nextProjectId++}`;
+    const id = `proj_${Date.now()}`;
     setProjects((ps) => [...ps, { id, label, color, icon }]);
   };
-  const updateProject = (id: ProjectId, patch: { color?: string; icon?: string; label?: string }) =>
+  const deleteProject = (id: ProjectId) => {
+    if (id === HOLD_PROJECT_ID) return;
+    setProjects(ps => ps.filter(p => p.id !== id));
+    setTasks(ts => ts.map(t => t.project === id ? { ...t, project: undefined as unknown as ProjectId } : t));
+    if (selectedProject === id) setSelectedProject(null);
+  };
+  const reorderProjects = (fromId: ProjectId, toId: ProjectId) => {
+    setProjects(prev => {
+      const arr = [...prev];
+      const from = arr.findIndex(p => p.id === fromId);
+      const to   = arr.findIndex(p => p.id === toId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  };
+  const updateProject = (id: ProjectId, patch: { color?: string; icon?: string; label?: string }) => {
+    if (id === HOLD_PROJECT_ID) return;
     setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  };
 
   const renameMemoCategory = (id: string, name: string) =>
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
   const recolorMemoCategory = (id: string, color: string) =>
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, color } : c));
+
+  // ── Cloud auto-save (all data) ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!syncedEmail) return;
+    if (!cloudHydratedRef.current) return;
+    const t = setTimeout(() => saveToCloud(syncedEmail, {
+      tasks, memos, settings, profile, people, projects, memoCategories, trash,
+    }), 2000);
+    return () => clearTimeout(t);
+  }, [tasks, memos, settings, profile, people, projects, memoCategories, trash, syncedEmail]);
 
   // Header period label and navigation
   const periodLabel = useMemo(() => {
@@ -521,6 +815,7 @@ export default function App() {
       );
       return;
     }
+    const completing = t && !t.done;
     setTasks((ts) =>
       ts.map((x) =>
         x.id === id
@@ -533,6 +828,7 @@ export default function App() {
           : x,
       ),
     );
+    if (completing && t) addNotif(t.title, "タスクを完了しました ✓", "system", t.id);
   };
   const updateTask = (id: string, patch: Partial<Task>) =>
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)));
@@ -541,7 +837,7 @@ export default function App() {
     setSelectedIds((ids) =>
       ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
     );
-  const clearSelection = () => setSelectedIds([]);
+  const clearSelection = () => { setSelectedIds([]); setCompletedDeleteConfirm(false); };
   const deleteTask = (id: string) => {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
@@ -608,6 +904,7 @@ export default function App() {
       ...ts,
       { ...data, id, done: false, starred: false, createdAt: now, updatedAt: now } as Task,
     ]);
+    addNotif(data.title, "タスクを追加しました", "system", id);
     return id;
   };
 
@@ -680,6 +977,7 @@ export default function App() {
       // Esc clears multi-selection
       if (e.key === "Escape" && selectedIds.length) {
         setSelectedIds([]);
+        setCompletedDeleteConfirm(false);
         return;
       }
       // Enter key no longer adds tasks inline
@@ -731,6 +1029,23 @@ export default function App() {
         const ap = projects.find((p) => p.id === a.project)?.label ?? "";
         const bp = projects.find((p) => p.id === b.project)?.label ?? "";
         return ap.localeCompare(bp, "ja");
+      });
+    } else if (listSort === "owner") {
+      copy.sort((a, b) => {
+        const an = people.find((p) => p.id === a.owner)?.name?.replace("（自分）", "") ?? "zzz";
+        const bn = people.find((p) => p.id === b.owner)?.name?.replace("（自分）", "") ?? "zzz";
+        return an.localeCompare(bn, "ja");
+      });
+    } else {
+      // date sort: within same date, timed tasks first sorted by time
+      copy.sort((a, b) => {
+        const dateCmp = (a.due ?? "").localeCompare(b.due ?? "");
+        if (dateCmp !== 0) return dateCmp;
+        const aT = a.dueTime ?? "";
+        const bT = b.dueTime ?? "";
+        if (aT && !bT) return -1;
+        if (!aT && bT) return 1;
+        return aT.localeCompare(bT);
       });
     }
     return copy;
@@ -850,6 +1165,7 @@ export default function App() {
   const LIST_SORT_OPTIONS: { id: ListSort; label: string }[] = [
     { id: "date",    label: "日付順" },
     { id: "project", label: "プロジェクト順" },
+    { id: "owner",   label: "担当者順" },
     { id: "custom",  label: "カスタム" },
   ];
   const listSortControl = (
@@ -947,6 +1263,8 @@ export default function App() {
     onAddTask: () => setShowModal(true),
     onAddProject: addProject,
     onUpdateProject: updateProject,
+    onReorderProjects: reorderProjects,
+    onDeleteProject: deleteProject,
     mainMode, onChangeMainMode: (mode: "tasks" | "memos") => { setMainMode(mode); if (mode === "memos") setRightOpen(false); },
     memoCategories, memoCounts, memoFilter,
     onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
@@ -1190,7 +1508,7 @@ export default function App() {
               onReorderMemo={reorderMemo}
             />
           ) : (
-          <div className="w-full max-w-[900px] px-3 py-4 md:px-8 md:py-6">
+          <div className={`w-full px-3 py-4 md:px-8 md:py-6 ${selectedId === null && inlineAfter === null ? "max-w-[900px]" : ""}`}>
           <div className="space-y-4 md:space-y-6">
             {layout === "kanban" ? (
               <KanbanView
@@ -1210,6 +1528,7 @@ export default function App() {
                 today={TODAY}
                 weekStart={settings.weekStart}
                 monthOffset={calendarOffset}
+                selectedTaskId={selectedId ?? undefined}
                 onSelect={setSelectedId}
                 onToggle={toggle}
                 onUpdate={(id, patch) => updateTask(id, patch)}
@@ -1222,6 +1541,7 @@ export default function App() {
               <TableView
                 tasks={flatVisible}
                 today={TODAY}
+                selectedId={selectedId}
                 onSelect={setSelectedId}
                 onToggle={toggle}
                 onUpdate={(id, patch) => updateTask(id, patch)}
@@ -1274,7 +1594,45 @@ export default function App() {
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="mb-3 flex items-center justify-between px-1">
                     <span className="text-sm font-semibold text-slate-700">{periodLabel}</span>
-                    {listSortControl}
+                    <div className="flex items-center gap-2">
+                      {view === "completed" && visibleIds.length > 0 && (() => {
+                        const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+                        return (
+                          <>
+                            <button
+                              onClick={() => allSelected ? clearSelection() : selectAllVisible()}
+                              className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${allSelected ? "bg-blue-100 text-blue-700 hover:bg-blue-200" : "text-slate-500 hover:bg-slate-100"}`}
+                            >
+                              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                {allSelected ? <><polyline points="20 6 9 17 4 12"/></> : <><rect x="3" y="3" width="18" height="18" rx="2"/></>}
+                              </svg>
+                              {allSelected ? "全て解除" : "全て選択"}
+                            </button>
+                            {selectionActive && (
+                              completedDeleteConfirm ? (
+                                <div className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-1">
+                                  <span className="text-xs text-red-700">{selectedIds.length}件削除？</span>
+                                  <button onClick={() => { bulkDelete(); setCompletedDeleteConfirm(false); }} className="text-xs font-bold text-red-600 hover:text-red-800">はい</button>
+                                  <span className="text-red-300">|</span>
+                                  <button onClick={() => setCompletedDeleteConfirm(false)} className="text-xs text-slate-400 hover:text-slate-600">いいえ</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setCompletedDeleteConfirm(true)}
+                                  className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                  </svg>
+                                  削除 ({selectedIds.length}件)
+                                </button>
+                              )
+                            )}
+                          </>
+                        );
+                      })()}
+                      {listSortControl}
+                    </div>
                   </div>
                   {renderGrouped(groups)}
                   {inlineAddButton("bottom")}

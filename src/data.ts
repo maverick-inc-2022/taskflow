@@ -13,11 +13,11 @@ import type {
 
 /** People who can "hold the ball" on a task. */
 export const people: Person[] = [
-  { id: "me",     name: "山田 太郎（自分）", avatar: "icon:male-adult:#3b82f6" },
-  { id: "shima",  name: "島藤 さん",         avatar: "icon:male-adult:#ec4899" },
-  { id: "tanaka", name: "田中 健一",          avatar: "icon:male-adult:#6366f1" },
-  { id: "suzuki", name: "鈴木 一郎",          avatar: "icon:male-adult:#f97316" },
-  { id: "sato",   name: "佐藤 美咲",          avatar: "icon:male-adult:#8b5cf6" },
+  { id: "me",       name: "（自分）",     avatar: "icon:male-adult:#3b82f6" },
+  { id: "shiina",   name: "椎名 茂",      avatar: "icon:male-adult:#ec4899" },
+  { id: "toyokuni", name: "豊國 成康",    avatar: "icon:male-adult:#6366f1" },
+  { id: "ro",       name: "呂 相吾",      avatar: "icon:male-adult:#f97316" },
+  { id: "nakui",    name: "名久井 聡",    avatar: "icon:male-adult:#8b5cf6" },
 ];
 
 export const repeatLabels: Record<RepeatMode, string> = {
@@ -47,6 +47,8 @@ export const defaultSettings: Settings = {
   fontSize: "medium",
   defaultView: "list" as const,
   defaultDateRange: "today" as const,
+  lineUserId: "",
+  lineNotifyDays: 1,
 };
 
 /** Task color tag → swatch + accent classes (used for the row stripe). */
@@ -66,49 +68,19 @@ export const taskColors: Record<
 // Kept for backwards compat — no longer used (replaced by AvatarPicker in avatarIcons.tsx)
 export const avatarChoices: string[] = [];
 
-export const initialNotifications: AppNotification[] = [
-  {
-    id: "n1",
-    title: "提案書の作成",
-    body: "期限が1時間後に迫っています（10:00まで）",
-    time: "5分前",
-    read: false,
-    kind: "task",
-  },
-  {
-    id: "n2",
-    title: "田中 健一 さんからのメンション",
-    body: "#proj-提案書「レビューお願いできますか？」",
-    time: "32分前",
-    read: false,
-    kind: "mention",
-  },
-  {
-    id: "n3",
-    title: "請求書の送付",
-    body: "明日が期限のタスクがあります",
-    time: "1時間前",
-    read: false,
-    kind: "task",
-  },
-  {
-    id: "n4",
-    title: "Googleカレンダー連携",
-    body: "今日の予定を同期しました",
-    time: "今朝",
-    read: true,
-    kind: "system",
-  },
-];
+export const initialNotifications: AppNotification[] = [];
 
 /** The "today" the demo is anchored to (matches the mockup). */
 export const TODAY = new Date().toLocaleDateString("sv-SE");
 
+export const HOLD_PROJECT_ID = "hold";
+
 export const defaultProjects: Project[] = [
-  { id: "work", label: "仕事", color: "bg-blue-500", icon: "💼" },
+  { id: "work",  label: "仕事",         color: "bg-blue-500",    icon: "💼" },
   { id: "private", label: "プライベート", color: "bg-emerald-500", icon: "🏠" },
-  { id: "study", label: "勉強", color: "bg-violet-500", icon: "📚" },
-  { id: "other", label: "その他", color: "bg-slate-400", icon: "📌" },
+  { id: "study", label: "勉強",         color: "bg-violet-500",  icon: "📚" },
+  { id: "other", label: "その他",       color: "bg-slate-400",   icon: "📌" },
+  { id: HOLD_PROJECT_ID, label: "保留", color: "bg-slate-500",   icon: "⏸" },
 ];
 
 /** Selectable color swatches for projects. */

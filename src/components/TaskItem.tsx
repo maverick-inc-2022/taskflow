@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { people as staticPeople, projects as staticProjects, taskColors, projectColorOptions } from "../data";
-import type { Person, Priority, Project, RepeatConfig, RepeatMode, Task } from "../types";
-import { dueLabel, priorityMeta } from "../ui";
+import type { Person, Project, RepeatConfig, RepeatMode, Task } from "../types";
+import { dueLabel } from "../ui";
 import { GripIcon, RepeatIcon, StarIcon } from "../icons";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 
@@ -16,7 +16,6 @@ interface Props {
   onHover?: (id: string | null) => void;
   onChangeProject?: (id: string, projectId: string) => void;
   onChangeOwner?: (id: string, ownerId: string | undefined) => void;
-  onChangePriority?: (id: string, priority: Priority) => void;
   onChangeDue?: (id: string, due: string, dueTime: string | undefined, repeat: RepeatMode, repeatConfig?: RepeatConfig) => void;
   onAddPerson?: (name: string, avatar: string) => void;
   onAddProject?: (label: string, color: string) => void;
@@ -85,7 +84,6 @@ export default function TaskItem({
   onHover,
   onChangeProject,
   onChangeOwner,
-  onChangePriority,
   onChangeDue,
   onAddPerson,
   onAddProject,
@@ -104,7 +102,6 @@ export default function TaskItem({
   const projects = propProjects ?? staticProjects;
   const people = propPeople ?? staticPeople;
   const project = projects.find((p) => p.id === task.project);
-  const pr = priorityMeta[task.priority];
   const owner = people.find((p) => p.id === task.owner);
   const stripe = task.color && task.color !== "none" ? taskColors[task.color]?.stripe : "";
   const isOthers = !!task.owner && task.owner !== "me";
@@ -120,8 +117,6 @@ export default function TaskItem({
   const [addingPerson, setAddingPerson] = useState(false);
   const [newPersonName, setNewPersonName] = useState("");
   const [newPersonAvatar, setNewPersonAvatar] = useState(DEFAULT_AVATAR);
-  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
-  const priorityBtnRef = useRef<HTMLSpanElement>(null);
   const [showDuePicker, setShowDuePicker] = useState(false);
   const dueBtnRef = useRef<HTMLSpanElement>(null);
 
@@ -203,7 +198,7 @@ export default function TaskItem({
       onDragOver={(e) => e.preventDefault()}
       onDrop={() => onDrop?.()}
       onDragEnd={() => onDragEnd?.()}
-      className={`group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition ${
+      className={`group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition border-b border-slate-100 ${
         task.done ? "" : stripe ? `border-l-4 ${stripe}` : ""
       } ${dragging ? "opacity-40" : isOthers && !task.done ? "opacity-40 hover:opacity-70" : ""} ${dragOver ? "ring-2 ring-blue-300" : ""} ${
         task.done
@@ -668,40 +663,6 @@ export default function TaskItem({
         )}
       </span>
 
-      {/* priority badge — desktop only */}
-      {task.done ? (
-        <span className="hidden h-6 w-20 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-400">
-          完了
-        </span>
-      ) : (
-        <span className="relative hidden shrink-0">
-          <span
-            ref={priorityBtnRef}
-            onClick={(e) => { e.stopPropagation(); selectAndEdit(); if (onChangePriority) setShowPriorityPicker((v) => !v); }}
-            className={`flex h-6 w-20 items-center justify-center rounded-md text-sm font-semibold ${pr.className} ${onChangePriority ? "cursor-pointer hover:opacity-80" : ""}`}
-          >
-            {pr.label}
-          </span>
-          {showPriorityPicker && (
-            <InlineDropdown
-              anchorRef={priorityBtnRef as React.RefObject<HTMLElement | null>}
-              onClose={() => setShowPriorityPicker(false)}
-            >
-              {(Object.keys(priorityMeta) as Priority[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => { onChangePriority?.(task.id, p); setShowPriorityPicker(false); }}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 ${task.priority === p ? "font-semibold" : "text-slate-700"}`}
-                >
-                  <span className={`flex h-5 w-12 items-center justify-center rounded-md text-xs font-semibold ${priorityMeta[p].className}`}>
-                    {priorityMeta[p].label}
-                  </span>
-                </button>
-              ))}
-            </InlineDropdown>
-          )}
-        </span>
-      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ type ColKey = "project" | "title" | "owner" | "due";
 interface Props {
   tasks: Task[];
   today: string;
+  selectedId?: string | null;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Task>) => void;
@@ -137,6 +138,7 @@ function FilterDropdown({ label, values, selected, anchorRef, onToggle, onClear,
 export default function TableView({
   tasks,
   today,
+  selectedId,
   onSelect,
   onToggle,
   onUpdate,
@@ -203,11 +205,18 @@ export default function TableView({
 
   const renderRow = (t: Task) => {
     const stripe = t.color && t.color !== "none" ? taskColors[t.color]?.stripe : "";
+    const isSelected = selectedId === t.id;
     return (
       <tr key={t.id}
         onClick={() => onSelect(t.id)}
-        className={`cursor-pointer border-b border-slate-100 transition hover:bg-slate-50 ${t.done ? "bg-slate-50 opacity-60" : ""}`}>
-        {/* Checkbox */}
+        className={`cursor-pointer border-b border-slate-100 transition ${
+          isSelected
+            ? "bg-blue-50 ring-2 ring-inset ring-blue-400"
+            : t.done
+            ? "bg-slate-50 opacity-60 hover:bg-slate-100"
+            : "hover:bg-slate-50"
+        }`}>
+        {/* Checkbox — stopPropagation so toggling done doesn't open the panel */}
         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => onToggle(t.id)} aria-label="完了"
             className={`flex h-4 w-4 items-center justify-center rounded border-2 transition ${
@@ -216,29 +225,29 @@ export default function TableView({
             {t.done && <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="m20 6-11 11-5-5" /></svg>}
           </button>
         </td>
-        {/* Project */}
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        {/* Project — inner span already stops propagation */}
+        <td className="px-3 py-2">
           {onUpdate
             ? <EditableProject task={t} projects={projects} onSave={(v) => onUpdate(t.id, { project: v })} onAddProject={onAddProject} />
             : (() => { const p = projects.find((p) => p.id === t.project); return p ? <span className="inline-flex items-center gap-1.5 text-slate-600"><span className={`h-2 w-2 rounded-full ${p.color}`} />{p.label}</span> : null; })()
           }
         </td>
-        {/* Title — clicking the text also triggers onSelect to open the notes panel */}
-        <td className={`px-3 py-2 ${stripe ? `border-l-4 ${stripe}` : ""}`} onClick={(e) => e.stopPropagation()}>
+        {/* Title — inner span already stops propagation; also calls onSelect directly */}
+        <td className={`px-3 py-2 ${stripe ? `border-l-4 ${stripe}` : ""}`}>
           {onUpdate
             ? <EditableTitle task={t} onSave={(v) => onUpdate(t.id, { title: v })} onSelect={() => onSelect(t.id)} />
-            : <span onClick={() => onSelect(t.id)} className={`cursor-pointer hover:underline ${t.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{t.title}</span>
+            : <span onClick={(e) => { e.stopPropagation(); onSelect(t.id); }} className={`cursor-pointer hover:underline ${t.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{t.title}</span>
           }
         </td>
-        {/* Owner */}
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        {/* Owner — inner span already stops propagation */}
+        <td className="px-3 py-2">
           {onUpdate
             ? <EditableOwner task={t} people={people} onAddPerson={onAddPerson} onSave={(v) => onUpdate(t.id, { owner: v })} />
             : (() => { const o = people.find((p) => p.id === t.owner); return o ? <span className="inline-flex items-center gap-1.5"><AvatarDisplay avatar={o.avatar} name={o.name} size={20} /><span className="text-slate-600">{o.name.replace("（自分）", "")}</span></span> : <span className="text-slate-300">—</span>; })()
           }
         </td>
-        {/* Due / Repeat */}
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        {/* Due / Repeat — inner span already stops propagation */}
+        <td className="px-3 py-2">
           {showRepeatCol ? (
             <span className={`text-xs font-medium ${t.repeat && t.repeat !== "none" ? "text-violet-600" : "text-slate-300"}`}>
               {repeatLabel(t.repeat, t.repeatConfig)}
