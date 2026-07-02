@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/slack-api/:path*", "destination": "/api/slack-proxy?slackPath=:path*" }
+  ]
+}
