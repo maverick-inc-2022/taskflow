@@ -48,6 +48,7 @@ import type {
 } from "./types";
 import { groupTasksByDate, nextDue, orderTasks, type TaskGroup } from "./ui";
 import { useGoogleAuth } from "./useGoogleAuth";
+import { memosToPlainText } from "./memoText";
 import {
   BellIcon,
   CalendarIcon,
@@ -382,11 +383,15 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     localStorage.getItem('taskflow_banner_dismissed') === '1'
   );
   const exportData = () => {
-    const headers = ["ID", "タイトル", "プロジェクト", "期日", "時刻", "完了", "スター", "担当者", "ステータス", "繰り返し", "カラー", "メモ", "作成日時", "更新日時"];
+    const headers = ["ID", "タイトル", "プロジェクト", "期日", "時刻", "完了", "スター", "担当者", "ステータス", "繰り返し", "カラー", "メモ", "サブタスク", "作成日時", "更新日時"];
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const rows = tasks.map((t) => {
       const proj = projects.find((p) => p.id === t.project)?.label ?? "";
       const owner = people.find((p) => p.id === t.owner)?.name?.replace("（自分）", "") ?? "";
+      const memo = memosToPlainText(t.memos) || (t.notes ?? "");
+      const subtasks = (t.subtasks ?? [])
+        .map((s) => `${s.done ? "[完了]" : "[未]"} ${s.title}`)
+        .join(" / ");
       return [
         t.id,
         t.title,
@@ -399,7 +404,8 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         t.status ?? "",
         t.repeat ?? "",
         t.color ?? "",
-        (t.notes ?? "").replace(/\n/g, " "),
+        memo.replace(/\r?\n/g, " "),
+        subtasks,
         t.createdAt ? new Date(t.createdAt).toISOString() : "",
         t.updatedAt ? new Date(t.updatedAt).toISOString() : "",
       ].map(escape).join(",");
