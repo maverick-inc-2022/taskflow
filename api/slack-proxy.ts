@@ -29,17 +29,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: "missing_token" });
   }
 
-  // Rebuild the Slack query string from everything except our own `slackPath`.
-  const qs = new URLSearchParams();
+  // Rebuild the Slack params from everything except our own `slackPath`.
+  const form = new URLSearchParams();
   for (const [k, v] of Object.entries(rest)) {
-    if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
-    else if (v != null) qs.append(k, String(v));
+    if (Array.isArray(v)) v.forEach((x) => form.append(k, x));
+    else if (v != null) form.append(k, String(v));
   }
-  const query = qs.toString();
-  const url = `https://slack.com/api/${method}${query ? `?${query}` : ""}`;
+
+  // Always POST with a form body: every Slack Web API method accepts POST,
+  // and some (e.g. slackLists.items.list) are POST-only.
+  const url = `https://slack.com/api/${method}`;
 
   try {
-    const r = await fetch(url, { headers: { Authorization: auth } });
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
     const data = await r.json();
     return res.status(200).json(data);
   } catch (e) {
