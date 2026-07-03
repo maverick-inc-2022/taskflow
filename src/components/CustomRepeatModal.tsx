@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { RepeatConfig, RepeatMode } from "../types";
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-const UNIT_LABELS: Record<string, string> = { day: "日ごと", week: "週ごと", month: "月ごと", year: "年ごと" };
+const UNIT_LABELS: Record<string, string> = { day: "日ごと", week: "週間ごと", month: "ヶ月ごと", year: "年ごと" };
 
 const REPEAT_OPTIONS: { id: RepeatMode; label: string }[] = [
   { id: "none", label: "なし" },
@@ -24,12 +24,13 @@ interface Props {
 export default function CustomRepeatModal({ due, repeat, repeatConfig, onChange, onClose }: Props) {
   const [config, setConfig] = useState<RepeatConfig>(repeatConfig);
 
-  const defaultConfig = (): RepeatConfig => ({
-    interval: 1,
-    unit: "week",
-    daysOfWeek: due ? [new Date(due + "T00:00:00").getDay()] : [],
-    endType: "none",
-  });
+  // 終了日・回数の既定値（未選択時にグレー表示するプレビュー）
+  const defaultEndDate = (() => {
+    const base = due ? new Date(due + "T00:00:00") : new Date();
+    base.setMonth(base.getMonth() + 1);
+    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+  })();
+  const DEFAULT_COUNT = 13;
 
   return (
     <>
@@ -84,27 +85,36 @@ export default function CustomRepeatModal({ due, repeat, repeatConfig, onChange,
 
         {/* 終了条件 */}
         <p className="mb-1 text-xs font-semibold text-slate-400">終了日</p>
-        <div className="mb-4 space-y-2">
-          {([["none", "なし"], ["date", "終了日:"], ["count", "繰り返し:"]] as const).map(([type, lbl]) => (
-            <label key={type} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-              <input type="radio" name="endType" value={type} checked={config.endType === type}
-                onChange={() => setConfig((c) => ({ ...c, endType: type }))} className="accent-blue-600" />
-              {lbl}
-              {type === "date" && config.endType === "date" && (
-                <input type="date" value={config.endDate ?? ""}
-                  onChange={(e) => setConfig((c) => ({ ...c, endDate: e.target.value }))}
-                  className="ml-1 flex-1 rounded border border-slate-200 px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" />
-              )}
-              {type === "count" && config.endType === "count" && (
-                <div className="ml-1 flex items-center gap-1">
-                  <input type="number" min={1} value={config.endCount ?? 1}
-                    onChange={(e) => setConfig((c) => ({ ...c, endCount: Math.max(1, +e.target.value) }))}
-                    className="w-14 rounded border border-slate-200 px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-blue-400" />
-                  <span className="text-xs text-slate-500">回</span>
-                </div>
-              )}
-            </label>
-          ))}
+        <div className="mb-4 space-y-2.5">
+          {/* なし */}
+          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="endType" checked={config.endType === "none"}
+              onChange={() => setConfig((c) => ({ ...c, endType: "none" }))} className="accent-blue-600" />
+            なし
+          </label>
+          {/* 終了日 */}
+          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="endType" checked={config.endType === "date"}
+              onChange={() => setConfig((c) => ({ ...c, endType: "date", endDate: c.endDate ?? defaultEndDate }))} className="accent-blue-600" />
+            <span className="shrink-0">終了日:</span>
+            <input type="date"
+              disabled={config.endType !== "date"}
+              value={config.endDate ?? defaultEndDate}
+              onChange={(e) => setConfig((c) => ({ ...c, endDate: e.target.value }))}
+              className="ml-1 flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-400" />
+          </label>
+          {/* 繰り返し回数 */}
+          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input type="radio" name="endType" checked={config.endType === "count"}
+              onChange={() => setConfig((c) => ({ ...c, endType: "count", endCount: c.endCount ?? DEFAULT_COUNT }))} className="accent-blue-600" />
+            <span className="shrink-0">繰り返し:</span>
+            <input type="number" min={1}
+              disabled={config.endType !== "count"}
+              value={config.endCount ?? DEFAULT_COUNT}
+              onChange={(e) => setConfig((c) => ({ ...c, endCount: Math.max(1, +e.target.value) }))}
+              className="ml-1 w-16 rounded-md border border-slate-200 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-slate-100 disabled:text-slate-400" />
+            <span className="text-xs text-slate-500">回</span>
+          </label>
         </div>
 
         <div className="flex gap-2">

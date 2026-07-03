@@ -24,7 +24,7 @@ export const repeatLabels: Record<RepeatMode, string> = {
   none: "繰り返しなし",
   daily: "毎日",
   weekly: "毎週",
-  "weekly-weekday": "毎週（曜日指定）",
+  "weekly-weekday": "平日（月〜金）",
   monthly: "毎月",
   yearly: "毎年",
   custom: "カスタム",
