@@ -8,6 +8,7 @@ const REPEAT_OPTIONS: { id: RepeatMode; label: string }[] = [
   { id: "none", label: "なし" },
   { id: "daily", label: "毎日" },
   { id: "weekly", label: "毎週" },
+  { id: "weekly-weekday", label: "平日（月〜金）" },
   { id: "monthly", label: "毎月" },
   { id: "yearly", label: "毎年" },
   { id: "custom", label: "カスタム…" },
