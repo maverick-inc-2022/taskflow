@@ -532,6 +532,12 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   const dirtyRef = useRef(localStorage.getItem('taskflow_dirty') === '1');
   const markDirty = () => { dirtyRef.current = true; try { localStorage.setItem('taskflow_dirty', '1'); } catch { /* noop */ } };
   const clearDirty = () => { dirtyRef.current = false; try { localStorage.removeItem('taskflow_dirty'); } catch { /* noop */ } };
+  // ローカルデータの最終更新時刻(ms)。クラウドの時刻と比較して「新しい方」を採用する。
+  const localTsRef = useRef<number>(Number(localStorage.getItem('taskflow_updated_at') || 0));
+  const bumpLocalTs = () => { const t = Date.now(); localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
+  const setLocalTs = (t: number) => { localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
+  // 保存世代カウンタ: 保存中に新しい編集が入ったら、その保存でdirtyを消さない
+  const saveGenRef = useRef(0);
 
   const apiHeaders = (): Record<string, string> => {
     const secret = import.meta.env.VITE_API_SECRET as string | undefined;
@@ -540,13 +546,6 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
 
   const loadFromCloud = async (email: string) => {
     try {
-      // 前回の変更がクラウドに届いていない場合は、古いクラウドデータで
-      // ローカルを上書きせず、逆にローカルをクラウドへ押し上げる。
-      if (dirtyRef.current) {
-        cloudHydratedRef.current = true;
-        saveToCloud(email, { tasks, memos, settings, profile, people, projects, memoCategories, trash });
-        return;
-      }
       const res = await fetch(`/api/user-data?email=${encodeURIComponent(email)}`, {
         headers: apiHeaders(),
       });
@@ -560,13 +559,28 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           _projects?: Project[];
           _memoCategories?: MemoCategory[];
           _trash?: Task[];
+          _ts?: number;
         };
       } | null;
       if (!data) return;
+
+      // クラウドとローカルの更新時刻を比較。ローカルが新しい（＝直近の保存が
+      // クラウドに届いていない）場合は、クラウドで上書きせずローカルを採用し、
+      // 逆にクラウドへ押し上げる。これで「保存後リロードで消える」を防ぐ。
+      const cloudTs = Number(data.settings?._ts ?? 0);
+      if (dirtyRef.current || localTsRef.current > cloudTs) {
+        cloudHydratedRef.current = true;
+        saveToCloud(email, { tasks, memos, settings, profile, people, projects, memoCategories, trash });
+        return;
+      }
+      // クラウドを採用するので、ローカルの時刻もクラウドに合わせる
+      setLocalTs(cloudTs);
+
       if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
       if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
       if (data.settings) {
-        const { _profile, _people, _projects, _memoCategories, _trash, ...actualSettings } = data.settings;
+        const { _profile, _people, _projects, _memoCategories, _trash, _ts, ...actualSettings } = data.settings;
+        void _ts;
         setSettings(s => ({ ...s, ...actualSettings }));
         if (_profile) setProfile(_profile);
         if (_people) setPeople(applyGoogleUserToMe(_people));
@@ -600,6 +614,8 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     }
   ) => {
     setSyncStatus("saving");
+    const gen = saveGenRef.current;      // この保存が対象とする編集世代
+    const ts = localTsRef.current;       // 送信するデータの更新時刻
     try {
       const res = await fetch("/api/user-data", {
         method: "POST",
@@ -615,11 +631,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
             _projects: snapshot.projects,
             _memoCategories: snapshot.memoCategories,
             _trash: snapshot.trash,
+            _ts: ts,
           },
         }),
       });
       setSyncStatus(res.ok ? "saved" : "error");
-      if (res.ok) clearDirty();
+      // 保存中に新しい編集が入っていなければ dirty を解除（取りこぼし防止）
+      if (res.ok && saveGenRef.current === gen) clearDirty();
     } catch { setSyncStatus("error"); }
   };
 
@@ -726,9 +744,9 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   useEffect(() => {
     if (!syncedEmail) return;
     if (!cloudHydratedRef.current) return;
-    // マウント直後（ロード反映による発火）はdirty扱いにしない
+    // マウント直後（ロード反映による発火）はユーザー編集ではないので時刻を進めない
     if (isFirstAutosave.current) { isFirstAutosave.current = false; }
-    else markDirty();
+    else { markDirty(); saveGenRef.current++; bumpLocalTs(); }
     const t = setTimeout(() => saveToCloud(syncedEmail, {
       tasks, memos, settings, profile, people, projects, memoCategories, trash,
     }), 800);
@@ -756,6 +774,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           ...s.settings,
           _profile: s.profile, _people: s.people, _projects: s.projects,
           _memoCategories: s.memoCategories, _trash: s.trash,
+          _ts: localTsRef.current,
         },
       });
       try { navigator.sendBeacon("/api/user-data", new Blob([body], { type: "application/json" })); } catch { /* noop */ }
