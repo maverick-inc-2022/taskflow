@@ -576,6 +576,27 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       // クラウドを採用するので、ローカルの時刻もクラウドに合わせる
       setLocalTs(cloudTs);
 
+      // ── メモ保護マージ ──
+      // クラウド側のメモが空でも、ローカルに中身が残っていれば消さずに残す。
+      // （事故でクラウドが空に上書きされても、まだ中身を持つ端末で開けば復元される）
+      let recovered = false;
+      const firstHtml = (t?: Task) => (t?.memos && t.memos[0]?.html) || "";
+      if (data.tasks) {
+        const localById = new Map(tasks.map((t) => [t.id, t]));
+        data.tasks = data.tasks.map((ct) => {
+          const lt = localById.get(ct.id);
+          if (!firstHtml(ct) && firstHtml(lt)) { recovered = true; return { ...ct, memos: lt!.memos }; }
+          return ct;
+        });
+      }
+      if (data.memos) {
+        const cloudMemoById = new Map((data.memos as StickyMemo[]).map((m) => [m.id, m]));
+        for (const lm of memos) {
+          const cm = cloudMemoById.get(lm.id);
+          if (cm && !((cm.content || "").trim()) && (lm.content || "").trim()) { cm.content = lm.content; recovered = true; }
+        }
+      }
+
       if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
       if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
       if (data.settings) {
@@ -600,6 +621,20 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         }
         if (_memoCategories) setMemoCategories(_memoCategories);
         if (_trash) { setTrash(_trash); localStorage.setItem('taskflow_trash', JSON.stringify(_trash)); }
+      }
+
+      // ローカルから復元したメモがあれば、クラウドへ書き戻して確定させる
+      if (recovered) {
+        cloudHydratedRef.current = true;
+        const { _profile: _p, _people: _pe, _projects: _pr, _memoCategories: _mc, _trash: _tr, _ts: _t, ...sOnly } = (data.settings ?? {}) as Settings & Record<string, unknown>;
+        void _p; void _pe; void _pr; void _mc; void _tr; void _t;
+        saveToCloud(email, {
+          tasks: (data.tasks ?? tasks) as Task[],
+          memos: (data.memos ?? memos) as StickyMemo[],
+          settings: sOnly as Settings,
+          profile, people, projects, memoCategories,
+          trash: (data.settings?._trash ?? trash) as Task[],
+        });
       }
     } catch { /* network error, use local data */ }
     finally { cloudHydratedRef.current = true; }
