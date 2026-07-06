@@ -569,8 +569,19 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       // （localStorage書き込み失敗などで古いローカルが誤ってクラウドを潰すのを防ぐ）。
       const cloudTs = Number(data.settings?._ts ?? 0);
       if (dirtyRef.current) {
+        // 未保存の変更を優先してクラウドへ押し上げる。ただしローカルで空になった
+        // メモにクラウド側の中身が残っていれば、それを取り込んでから押し上げる
+        // （空ローカルが復元済みクラウドを再び潰すのを防ぐ）。
+        const cloudTaskById = new Map((data.tasks ?? []).map((ct) => [ct.id, ct]));
+        const firstH = (t?: Task) => (t?.memos && t.memos[0]?.html) || "";
+        const mergedTasks = tasks.map((lt) => {
+          const ct = cloudTaskById.get(lt.id);
+          if (!firstH(lt) && firstH(ct)) return { ...lt, memos: ct!.memos };
+          return lt;
+        });
         cloudHydratedRef.current = true;
-        saveToCloud(email, { tasks, memos, settings, profile, people, projects, memoCategories, trash });
+        saveToCloud(email, { tasks: mergedTasks, memos, settings, profile, people, projects, memoCategories, trash });
+        setTasks(mergedTasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(mergedTasks));
         return;
       }
       // クラウドを採用するので、ローカルの時刻もクラウドに合わせる
