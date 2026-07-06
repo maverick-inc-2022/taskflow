@@ -419,6 +419,97 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // ── 完全バックアップ（リンク・ファイル・メモ全部入り。JSONでラウンドトリップ） ──
+  const downloadFile = (name: string, text: string, type: string) => {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportBackup = () => {
+    const payload = {
+      app: "taskflow", kind: "full-backup", version: 1,
+      exportedAt: new Date().toISOString(),
+      tasks, trash, memos, settings, projects, people, memoCategories,
+    };
+    downloadFile(`taskflow_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload), "application/json");
+  };
+  const importBackup = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result as string);
+        if (d.kind !== "full-backup" || !Array.isArray(d.tasks)) {
+          alert("このファイルはTaskFlowの完全バックアップ(JSON)ではありません。");
+          return;
+        }
+        const when = d.exportedAt ? new Date(d.exportedAt).toLocaleString("ja-JP") : "不明";
+        if (!window.confirm(`バックアップ（${when} 時点）で現在のデータを置き換えます。よろしいですか？\n※復元前に、現在の状態は自動バックアップに保存されます。`)) return;
+        // 復元直前に現状をスナップショット退避
+        pushSnapshot("復元前");
+        if (Array.isArray(d.tasks)) { seedCounters(d.tasks); setTasks(d.tasks); }
+        if (Array.isArray(d.memos)) setMemos(d.memos);
+        if (Array.isArray(d.trash)) setTrash(d.trash);
+        if (d.settings) setSettings(s => ({ ...s, ...d.settings }));
+        if (Array.isArray(d.projects)) setProjects(d.projects);
+        if (Array.isArray(d.people)) setPeople(applyGoogleUserToMe(d.people));
+        if (Array.isArray(d.memoCategories)) setMemoCategories(d.memoCategories);
+        markDirty();
+        alert("バックアップから復元しました。");
+      } catch {
+        alert("ファイルの読み込みに失敗しました。JSON形式のバックアップを選んでください。");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // ── 自動バックアップ（端末内に直近の世代を保持） ──
+  const pushSnapshot = (label = "auto") => {
+    try {
+      const raw = localStorage.getItem('taskflow_snapshots');
+      const list: Array<{ ts: number; label: string; tasks: unknown; memos: unknown }> = raw ? JSON.parse(raw) : [];
+      list.unshift({ ts: Date.now(), label, tasks, memos });
+      // 直近8世代だけ保持。容量超過時は古いものから捨てる
+      let trimmed = list.slice(0, 8);
+      while (trimmed.length > 0) {
+        try { localStorage.setItem('taskflow_snapshots', JSON.stringify(trimmed)); break; }
+        catch { trimmed = trimmed.slice(0, trimmed.length - 1); }
+      }
+    } catch { /* noop */ }
+  };
+  const getSnapshots = (): Array<{ ts: number; label: string }> => {
+    try {
+      const raw = localStorage.getItem('taskflow_snapshots');
+      const list = raw ? JSON.parse(raw) : [];
+      return (list as Array<{ ts: number; label: string }>).map(s => ({ ts: s.ts, label: s.label }));
+    } catch { return []; }
+  };
+  const restoreSnapshot = (ts: number) => {
+    try {
+      const raw = localStorage.getItem('taskflow_snapshots');
+      const list = raw ? JSON.parse(raw) as Array<{ ts: number; label: string; tasks: Task[]; memos: StickyMemo[] }> : [];
+      const snap = list.find(s => s.ts === ts);
+      if (!snap) return;
+      if (!window.confirm(`${new Date(ts).toLocaleString("ja-JP")} 時点の自動バックアップに戻します。よろしいですか？`)) return;
+      pushSnapshot("復元前");
+      if (Array.isArray(snap.tasks)) { seedCounters(snap.tasks); setTasks(snap.tasks); }
+      if (Array.isArray(snap.memos)) setMemos(snap.memos);
+      markDirty();
+      alert("自動バックアップから復元しました。");
+    } catch { /* noop */ }
+  };
+
+  // 変更があってから約1分後に自動スナップショット（頻繁な保存を避けつつ世代を残す）
+  const lastSnapRef = useRef(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (Date.now() - lastSnapRef.current > 60_000) { lastSnapRef.current = Date.now(); pushSnapshot("auto"); }
+    }, 60_000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, memos]);
   const gcal = useGoogleAuth("https://www.googleapis.com/auth/calendar", "taskflow_gcal_token");
   const gmail = useGoogleAuth("https://www.googleapis.com/auth/gmail.readonly", "taskflow_gmail_token");
   const [settings, setSettings] = useState<Settings>(() => {
@@ -1982,6 +2073,10 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           userEmail={profile.email}
           onChangePassword={handleChangePassword}
           onExport={exportData}
+          onExportBackup={exportBackup}
+          onImportBackup={importBackup}
+          snapshots={getSnapshots()}
+          onRestoreSnapshot={restoreSnapshot}
         />
       )}
       {activeModal === "help" && (

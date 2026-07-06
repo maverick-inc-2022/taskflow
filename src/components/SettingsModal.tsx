@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AvatarDisplay, AvatarPicker, DEFAULT_AVATAR } from "../avatarIcons";
 import type { FontSize, LayoutMode, Person, Settings } from "../types";
 import Modal from "./Modal";
@@ -75,7 +75,8 @@ function Row({
   );
 }
 
-export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, userEmail, onChangePassword, onExport }: Props & { onExport?: () => void }) {
+export default function SettingsModal({ settings, onChange, onClose, people = [], onAddPerson, onRemovePerson, onUpdatePerson, avatarChoices = [], googleCalConnected, onGoogleCalConnect, onGoogleCalDisconnect, gmailConnected, onGmailConnect, onGmailDisconnect, userEmail, onChangePassword, onExport, onExportBackup, onImportBackup, snapshots = [], onRestoreSnapshot }: Props & { onExport?: () => void; onExportBackup?: () => void; onImportBackup?: (file: File) => void; snapshots?: Array<{ ts: number; label: string }>; onRestoreSnapshot?: (ts: number) => void }) {
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
   const [newName, setNewName] = useState("");
@@ -457,20 +458,71 @@ export default function SettingsModal({ settings, onChange, onClose, people = []
         </>
       )}
 
-      <div className="mt-6 flex items-center justify-between">
-        {onExport ? (
-          <button
-            onClick={onExport}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            データをエクスポート
-          </button>
-        ) : <span />}
+      {/* データ・バックアップ */}
+      {(onExport || onExportBackup || onImportBackup) && (
+        <>
+          <p className="mb-1 mt-6 text-xs font-semibold tracking-wide text-slate-400">データ・バックアップ</p>
+          <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
+            {onExportBackup && (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">完全バックアップ（推奨）</p>
+                  <p className="text-xs text-slate-400">メモ・リンク・ファイル・全設定を丸ごと保存（.json）。復元でそのまま元に戻せます。</p>
+                </div>
+                <button onClick={onExportBackup}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition">
+                  ダウンロード
+                </button>
+              </div>
+            )}
+            {onImportBackup && (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">バックアップから復元</p>
+                  <p className="text-xs text-slate-400">ダウンロードした .json をアップロードすると、その時点に戻ります。</p>
+                </div>
+                <button onClick={() => restoreInputRef.current?.click()}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+                  アップロード
+                </button>
+                <input ref={restoreInputRef} type="file" accept="application/json,.json" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportBackup(f); e.target.value = ""; }} />
+              </div>
+            )}
+            {onExport && (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">CSVエクスポート（閲覧用）</p>
+                  <p className="text-xs text-slate-400">Excel等で見る用。※リンク・ファイルは含まれません。</p>
+                </div>
+                <button onClick={onExport}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+                  CSV
+                </button>
+              </div>
+            )}
+            {onRestoreSnapshot && snapshots.length > 0 && (
+              <div className="border-t border-slate-100 pt-2.5">
+                <p className="mb-1.5 text-sm font-medium text-slate-700">自動バックアップ（この端末）</p>
+                <div className="space-y-1">
+                  {snapshots.slice(0, 8).map((s) => (
+                    <div key={s.ts} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-1.5">
+                      <span className="text-xs text-slate-500">{new Date(s.ts).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}{s.label !== "auto" ? `（${s.label}）` : ""}</span>
+                      <button onClick={() => onRestoreSnapshot(s.ts)}
+                        className="shrink-0 rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-white transition">
+                        復元
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">数分ごとに自動保存。この端末のブラウザ内に最大8世代。</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="mt-6 flex items-center justify-end">
         <button onClick={onClose}
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           完了
