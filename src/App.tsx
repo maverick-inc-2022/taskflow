@@ -88,6 +88,13 @@ let nextId = 100;
 let completeCounter = 1;
 let subId = 1;
 let memoSeq = 1; // disambiguates memo ids created within the same millisecond
+let uidSeq = 0;  // module-level monotonic counter for person/project ids
+const uniqueId = (prefix: string) => `${prefix}_${Date.now().toString(36)}${(uidSeq++).toString(36)}`;
+/** 同一IDの重複を除去（先勝ち）。旧バグで発生した重複人物/プロジェクトを掃除する。 */
+function dedupeById<T extends { id: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  return list.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+}
 
 /** Seed the module-level id/counter state from restored data so freshly
  *  generated ids never collide with persisted ones after a reload. */
@@ -454,7 +461,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         if (Array.isArray(d.trash)) setTrash(d.trash);
         if (d.settings) setSettings(s => ({ ...s, ...d.settings }));
         if (Array.isArray(d.projects)) setProjects(d.projects);
-        if (Array.isArray(d.people)) setPeople(applyGoogleUserToMe(d.people));
+        if (Array.isArray(d.people)) setPeople(dedupeById(applyGoogleUserToMe(d.people)));
         if (Array.isArray(d.memoCategories)) setMemoCategories(d.memoCategories);
         markDirty();
         alert("バックアップから復元しました。");
@@ -706,7 +713,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         void _ts;
         setSettings(s => ({ ...s, ...actualSettings }));
         if (_profile) setProfile(_profile);
-        if (_people) setPeople(applyGoogleUserToMe(_people));
+        if (_people) setPeople(dedupeById(applyGoogleUserToMe(_people)));
         if (_projects) {
           // Deduplicate by id (guard against double-save bugs)
           const seen = new Set<string>();
@@ -829,10 +836,9 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     );
 
   // People (stateful for adding/removing members)
-  const [people, setPeople] = useState<Person[]>(() => applyGoogleUserToMe(defaultPeople));
-  let nextPersonId = 200;
+  const [people, setPeople] = useState<Person[]>(() => dedupeById(applyGoogleUserToMe(defaultPeople)));
   const addPerson = (name: string, avatar: string) => {
-    const id = `person${nextPersonId++}`;
+    const id = uniqueId("person");
     setPeople((ps) => [...ps, { id, name, avatar }]);
   };
   const removePerson = (id: string) => {
@@ -846,7 +852,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   // Projects (stateful for color editing + adding new)
   const [projects, setProjects] = useState<Project[]>(defaultProjects);
   const addProject = (label: string, color: string, icon: string) => {
-    const id = `proj_${Date.now()}`;
+    const id = uniqueId("proj");
     setProjects((ps) => [...ps, { id, label, color, icon }]);
   };
   const deleteProject = (id: ProjectId) => {
