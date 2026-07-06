@@ -527,6 +527,11 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   // Block autosave until the initial cloud load has resolved, so empty/stale
   // local state can't overwrite real cloud data on a fresh device.
   const cloudHydratedRef = useRef(false);
+  // クラウド未反映の変更フラグ。前回セッションの保存が間に合わなかった場合、
+  // 起動時にクラウドの古いデータでローカルを上書きしないためのガード。
+  const dirtyRef = useRef(localStorage.getItem('taskflow_dirty') === '1');
+  const markDirty = () => { dirtyRef.current = true; try { localStorage.setItem('taskflow_dirty', '1'); } catch { /* noop */ } };
+  const clearDirty = () => { dirtyRef.current = false; try { localStorage.removeItem('taskflow_dirty'); } catch { /* noop */ } };
 
   const apiHeaders = (): Record<string, string> => {
     const secret = import.meta.env.VITE_API_SECRET as string | undefined;
@@ -535,6 +540,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
 
   const loadFromCloud = async (email: string) => {
     try {
+      // 前回の変更がクラウドに届いていない場合は、古いクラウドデータで
+      // ローカルを上書きせず、逆にローカルをクラウドへ押し上げる。
+      if (dirtyRef.current) {
+        cloudHydratedRef.current = true;
+        saveToCloud(email, { tasks, memos, settings, profile, people, projects, memoCategories, trash });
+        return;
+      }
       const res = await fetch(`/api/user-data?email=${encodeURIComponent(email)}`, {
         headers: apiHeaders(),
       });
@@ -607,8 +619,8 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         }),
       });
       setSyncStatus(res.ok ? "saved" : "error");
-      setTimeout(() => setSyncStatus("idle"), 2000);
-    } catch { setSyncStatus("error"); setTimeout(() => setSyncStatus("idle"), 2000); }
+      if (res.ok) clearDirty();
+    } catch { setSyncStatus("error"); }
   };
 
   // Auto-connect cloud sync using Google account email on mount
@@ -710,14 +722,52 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, color } : c));
 
   // ── Cloud auto-save (all data) ──────────────────────────────────────────────
+  const isFirstAutosave = useRef(true);
   useEffect(() => {
     if (!syncedEmail) return;
     if (!cloudHydratedRef.current) return;
+    // マウント直後（ロード反映による発火）はdirty扱いにしない
+    if (isFirstAutosave.current) { isFirstAutosave.current = false; }
+    else markDirty();
     const t = setTimeout(() => saveToCloud(syncedEmail, {
       tasks, memos, settings, profile, people, projects, memoCategories, trash,
-    }), 2000);
+    }), 800);
     return () => clearTimeout(t);
   }, [tasks, memos, settings, profile, people, projects, memoCategories, trash, syncedEmail]);
+
+  // 最新状態への参照（ページ離脱時のフラッシュ送信用）
+  const snapshotRef = useRef({ tasks, memos, settings, profile, people, projects, memoCategories, trash });
+  snapshotRef.current = { tasks, memos, settings, profile, people, projects, memoCategories, trash };
+  const syncedEmailRef = useRef(syncedEmail);
+  syncedEmailRef.current = syncedEmail;
+
+  // リロード・タブを閉じる・アプリ切替時に、未保存分を即時送信する。
+  // sendBeaconはページ遷移中でも送信が完了しやすい。
+  useEffect(() => {
+    const flush = () => {
+      const email = syncedEmailRef.current;
+      if (!email || !cloudHydratedRef.current) return;
+      const s = snapshotRef.current;
+      const body = JSON.stringify({
+        email,
+        tasks: s.tasks,
+        memos: s.memos,
+        settings: {
+          ...s.settings,
+          _profile: s.profile, _people: s.people, _projects: s.projects,
+          _memoCategories: s.memoCategories, _trash: s.trash,
+        },
+      });
+      try { navigator.sendBeacon("/api/user-data", new Blob([body], { type: "application/json" })); } catch { /* noop */ }
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   // Header period label and navigation
   const periodLabel = useMemo(() => {
@@ -1395,6 +1445,33 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           )}
 
           <div className="flex-1" />
+
+          {/* 保存状態インジケーター */}
+          {syncedEmail && (
+            syncStatus === "saving" ? (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                保存中…
+              </span>
+            ) : syncStatus === "error" ? (
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-500">
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                保存エラー
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-600">
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m20 6-11 11-5-5"/>
+                </svg>
+                保存済み
+              </span>
+            )
+          )}
 
           {/* Icon actions */}
           <div className="flex items-center gap-0.5">

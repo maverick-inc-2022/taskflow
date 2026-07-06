@@ -50,7 +50,9 @@ export default function MobileTaskDetail({
   const [linkUrl, setLinkUrl]     = useState("");
   const [fontSize, setFontSize]   = useState("14px");
 
-  useEffect(() => { setTitle(task.title); }, [task.id, task.title]);
+  // task.idのみ依存: リアルタイム保存でtask.titleが変わっても入力中の文字を巻き戻さない
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setTitle(task.title); }, [task.id]);
 
   // Initialize editor HTML when task changes
   useEffect(() => {
@@ -98,6 +100,22 @@ export default function MobileTaskDetail({
     if (t && t !== task.title) onUpdate({ title: t });
     else setTitle(task.title);
   };
+
+  // リアルタイム保存: 入力が止まったらblurを待たずにコミット（空文字は保存しない）
+  const titleLiveRef = useRef(() => {});
+  titleLiveRef.current = () => {
+    const t = title.trim();
+    if (t && t !== task.title) onUpdate({ title: t });
+  };
+  const titleTimer = useRef<number | null>(null);
+  const scheduleTitleSave = () => {
+    if (titleTimer.current) window.clearTimeout(titleTimer.current);
+    titleTimer.current = window.setTimeout(() => titleLiveRef.current(), 600);
+  };
+  useEffect(() => () => {
+    if (titleTimer.current) window.clearTimeout(titleTimer.current);
+    titleLiveRef.current();
+  }, []);
 
   // Save editor HTML to task.memos
   const saveHtml = useCallback(() => {
@@ -234,7 +252,7 @@ export default function MobileTaskDetail({
           </button>
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { setTitle(e.target.value); scheduleTitleSave(); }}
             onBlur={saveTitle}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             className={`min-w-0 flex-1 bg-transparent font-semibold text-slate-800 outline-none placeholder:text-slate-300 ${task.done ? "line-through text-slate-400" : ""}`}

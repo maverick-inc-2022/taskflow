@@ -176,7 +176,9 @@ export default function TaskDetailPanel({
   const savedMemoRange   = useRef<Range | null>(null);
   const subtasks = task.subtasks ?? [];
 
-  useEffect(() => { setTitleDraft(task.title); }, [task.id, task.title]);
+  // task.idのみ依存: リアルタイム保存中にtask.titleが変わっても入力中の文字を巻き戻さない
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setTitleDraft(task.title); }, [task.id]);
   useEffect(() => {
     if (memoEditorRef.current) {
       memoEditorRef.current.innerHTML = task.memos?.[0]?.html ?? "";
@@ -223,6 +225,34 @@ export default function TaskDetailPanel({
       onUpdate({ memos: [{ id: task.memos?.[0]?.id ?? `memo_${Date.now()}`, label: "メモ①", html, checklist: task.memos?.[0]?.checklist ?? [], attachments: task.memos?.[0]?.attachments ?? [] }] });
     }
   };
+
+  // ── リアルタイム保存（blurを待たず、入力が止まったら即コミット） ──
+  const commitMemoRef = useRef(commitMemoHtml);
+  commitMemoRef.current = commitMemoHtml;
+  const memoCommitTimer = useRef<number | null>(null);
+  const scheduleMemoCommit = () => {
+    if (memoCommitTimer.current) window.clearTimeout(memoCommitTimer.current);
+    memoCommitTimer.current = window.setTimeout(() => commitMemoRef.current(), 500);
+  };
+  // タイトルは空文字への巻き戻しを避けるため、有効値のときだけ即コミット
+  const commitTitleLive = () => {
+    const t = titleDraft.trim();
+    if (t && t !== task.title) onUpdate({ title: t });
+  };
+  const commitTitleLiveRef = useRef(commitTitleLive);
+  commitTitleLiveRef.current = commitTitleLive;
+  const titleCommitTimer = useRef<number | null>(null);
+  const scheduleTitleCommit = () => {
+    if (titleCommitTimer.current) window.clearTimeout(titleCommitTimer.current);
+    titleCommitTimer.current = window.setTimeout(() => commitTitleLiveRef.current(), 600);
+  };
+  useEffect(() => () => {
+    // アンマウント時（タスク切替・パネルを閉じる）に未保存分をフラッシュ
+    if (memoCommitTimer.current) window.clearTimeout(memoCommitTimer.current);
+    if (titleCommitTimer.current) window.clearTimeout(titleCommitTimer.current);
+    commitMemoRef.current();
+    commitTitleLiveRef.current();
+  }, []);
 
   const memoBtn = (title: string, onClick: () => void, content: ReactNode) => (
     <button
@@ -496,7 +526,7 @@ export default function TaskDetailPanel({
 
         <textarea
           value={titleDraft}
-          onChange={(e) => setTitleDraft(e.target.value)}
+          onChange={(e) => { setTitleDraft(e.target.value); scheduleTitleCommit(); }}
           onBlur={commitTitle}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitTitle(); (e.target as HTMLTextAreaElement).blur(); } }}
           rows={1}
@@ -893,6 +923,7 @@ export default function TaskDetailPanel({
             ref={memoEditorRef}
             contentEditable
             suppressContentEditableWarning
+            onInput={scheduleMemoCommit}
             onBlur={commitMemoHtml}
             onPaste={(e) => handleMemoPaste(e, memoEditorRef)}
             onClick={(e) => {
