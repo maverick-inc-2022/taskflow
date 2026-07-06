@@ -119,8 +119,15 @@ export default function MobileTaskDetail({
 
   // Save editor HTML to task.memos
   const saveHtml = useCallback(() => {
-    const html = memoEditorRef.current?.innerHTML ?? "";
+    const el = memoEditorRef.current;
+    if (!el) return; // 参照がない（アンマウント直後など）ときは保存しない
+    const html = el.innerHTML ?? "";
     const first = task.memos?.[0];
+    const existing = first?.html ?? "";
+    if (html === existing) return;
+    // 中身のあるメモを空に上書きしない（誤消去防止）
+    const isBlank = html.replace(/<br\s*\/?>|&nbsp;|<div>\s*<\/div>|\s/gi, "") === "";
+    if (isBlank && existing.replace(/<br\s*\/?>|&nbsp;|<div>\s*<\/div>|\s/gi, "") !== "") return;
     const updated: NoteMemo = first ? { ...first, html } : emptyMemo();
     updated.html = html;
     const rest = task.memos?.slice(1) ?? [];

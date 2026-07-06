@@ -219,12 +219,17 @@ export default function TaskDetailPanel({
     else setTitleDraft(task.title);
   };
 
+  const isBlankHtml = (h: string) => h.replace(/<br\s*\/?>|&nbsp;|<div>\s*<\/div>|\s/gi, "") === "";
+
   const commitMemoHtml = () => {
-    const html = memoEditorRef.current?.innerHTML ?? "";
+    const el = memoEditorRef.current;
+    if (!el) return; // 参照がない（アンマウント直後など）ときは絶対に保存しない
+    const html = el.innerHTML ?? "";
     const existing = task.memos?.[0]?.html ?? "";
-    if (html !== existing) {
-      onUpdate({ memos: [{ id: task.memos?.[0]?.id ?? `memo_${Date.now()}`, label: "メモ①", html, checklist: task.memos?.[0]?.checklist ?? [], attachments: task.memos?.[0]?.attachments ?? [] }] });
-    }
+    if (html === existing) return;
+    // 中身のあるメモを自動保存経路で空に上書きしない（誤消去防止）
+    if (isBlankHtml(html) && !isBlankHtml(existing)) return;
+    onUpdate({ memos: [{ id: task.memos?.[0]?.id ?? `memo_${Date.now()}`, label: "メモ①", html, checklist: task.memos?.[0]?.checklist ?? [], attachments: task.memos?.[0]?.attachments ?? [] }] });
   };
 
   // ── リアルタイム保存（blurを待たず、入力が止まったら即コミット） ──
@@ -248,11 +253,11 @@ export default function TaskDetailPanel({
     titleCommitTimer.current = window.setTimeout(() => commitTitleLiveRef.current(), 600);
   };
   useEffect(() => () => {
-    // アンマウント時（タスク切替・パネルを閉じる）に未保存分をフラッシュ
+    // アンマウント時はタイマーを止めるだけ。ここでメモを保存すると、DOM参照が
+    // 既にnull化していて「空」で上書き＝消去してしまうため保存はしない。
+    // 直近の編集は onBlur（タスク切替時にエディタがフォーカスを失う）で保存済み。
     if (memoCommitTimer.current) window.clearTimeout(memoCommitTimer.current);
     if (titleCommitTimer.current) window.clearTimeout(titleCommitTimer.current);
-    commitMemoRef.current();
-    commitTitleLiveRef.current();
   }, []);
 
   const memoBtn = (title: string, onClick: () => void, content: ReactNode) => (
