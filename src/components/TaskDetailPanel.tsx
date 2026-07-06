@@ -5,7 +5,7 @@ import type { Person, Project, RepeatMode, Task } from "../types";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
 import { AvatarDisplay } from "../avatarIcons";
 import CustomRepeatModal from "./CustomRepeatModal";
-import { fileToCompressedDataUrl, shrinkInlineImages } from "../imageUtils";
+import { fileToCompressedDataUrl } from "../imageUtils";
 
 // ── Memo expand editor (stable mount to avoid contentEditable re-render issues)
 const MemoExpandEditor = memo(function MemoExpandEditor({
@@ -254,12 +254,6 @@ export default function TaskDetailPanel({
     commitMemoRef.current();
     commitTitleLiveRef.current();
   }, []);
-
-  // タスクを開いたとき、旧データの特大インライン画像を縮小して保存可能サイズに戻す
-  useEffect(() => {
-    shrinkInlineImages(memoEditorRef.current).then(changed => { if (changed) commitMemoRef.current(); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id]);
 
   const memoBtn = (title: string, onClick: () => void, content: ReactNode) => (
     <button

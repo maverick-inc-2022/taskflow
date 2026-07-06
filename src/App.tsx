@@ -564,11 +564,11 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       } | null;
       if (!data) return;
 
-      // クラウドとローカルの更新時刻を比較。ローカルが新しい（＝直近の保存が
-      // クラウドに届いていない）場合は、クラウドで上書きせずローカルを採用し、
-      // 逆にクラウドへ押し上げる。これで「保存後リロードで消える」を防ぐ。
+      // 未保存の変更(dirty)が残っている場合のみ、クラウドで上書きせずローカルを
+      // 採用してクラウドへ押し上げる。localの時刻が新しいだけでは上書きしない
+      // （localStorage書き込み失敗などで古いローカルが誤ってクラウドを潰すのを防ぐ）。
       const cloudTs = Number(data.settings?._ts ?? 0);
-      if (dirtyRef.current || localTsRef.current > cloudTs) {
+      if (dirtyRef.current) {
         cloudHydratedRef.current = true;
         saveToCloud(email, { tasks, memos, settings, profile, people, projects, memoCategories, trash });
         return;
