@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { StickyMemo, MemoCategory } from "../types";
+import { fileToCompressedDataUrl } from "../imageUtils";
 
 // ── Built-in categories ───────────────────────────────────────────────────────
 
@@ -467,13 +468,10 @@ function MemoCard({
     e.preventDefault();
     const file = imgItem.getAsFile();
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const dataUrl = evt.target?.result as string;
+    fileToCompressedDataUrl(file).then((dataUrl) => {
       const img = document.createElement("img");
       img.src = dataUrl;
       img.style.maxWidth = "100%";
-      img.style.width = "360px";
       img.className = "memo-image";
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
@@ -488,8 +486,7 @@ function MemoCard({
         editorRef.current?.appendChild(img);
       }
       onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
-    };
-    reader.readAsDataURL(file);
+    });
   }, [onUpdate]);
 
   // File attachment handler
@@ -497,23 +494,24 @@ function MemoCard({
     const files = Array.from(e.target.files ?? []);
     files.forEach(file => {
       const isImage = file.type.startsWith("image/");
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const dataUrl = evt.target?.result as string;
-        if (isImage) {
+      if (isImage) {
+        fileToCompressedDataUrl(file).then((dataUrl) => {
           const img = document.createElement("img");
           img.src = dataUrl;
           img.style.maxWidth = "100%";
-          img.style.width = "360px";
           img.className = "memo-image";
           editorRef.current?.appendChild(img);
           onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
-        } else {
+        });
+      } else {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const dataUrl = evt.target?.result as string;
           const newFile = { id: `f${Date.now()}`, name: file.name, size: file.size, dataUrl };
           onUpdate({ files: [...(memo.files ?? []), newFile], updatedAt: Date.now() });
-        }
-      };
-      reader.readAsDataURL(file);
+        };
+        reader.readAsDataURL(file);
+      }
     });
     e.target.value = "";
   }, [onUpdate, memo.files]);
@@ -929,15 +927,13 @@ function MemoExpandModal({ memo, categories, onUpdate, onClose }: ExpandModalPro
     e.preventDefault();
     const file = imgItem.getAsFile();
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
+    fileToCompressedDataUrl(file).then((dataUrl) => {
       const img = document.createElement("img");
-      img.src = evt.target?.result as string;
-      img.style.maxWidth = "100%"; img.style.width = "480px"; img.className = "memo-image";
+      img.src = dataUrl;
+      img.style.maxWidth = "100%"; img.className = "memo-image";
       editorRef.current?.appendChild(img);
       onUpdate({ content: editorRef.current?.innerHTML ?? "", updatedAt: Date.now() });
-    };
-    reader.readAsDataURL(file);
+    });
   }, [onUpdate]);
 
   return (

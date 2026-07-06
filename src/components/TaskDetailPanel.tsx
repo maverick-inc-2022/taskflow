@@ -5,6 +5,7 @@ import type { Person, Project, RepeatMode, Task } from "../types";
 import { StarIcon, XIcon, TrashIcon } from "../icons";
 import { AvatarDisplay } from "../avatarIcons";
 import CustomRepeatModal from "./CustomRepeatModal";
+import { fileToCompressedDataUrl, shrinkInlineImages } from "../imageUtils";
 
 // ── Memo expand editor (stable mount to avoid contentEditable re-render issues)
 const MemoExpandEditor = memo(function MemoExpandEditor({
@@ -254,6 +255,12 @@ export default function TaskDetailPanel({
     commitTitleLiveRef.current();
   }, []);
 
+  // タスクを開いたとき、旧データの特大インライン画像を縮小して保存可能サイズに戻す
+  useEffect(() => {
+    shrinkInlineImages(memoEditorRef.current).then(changed => { if (changed) commitMemoRef.current(); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+
   const memoBtn = (title: string, onClick: () => void, content: ReactNode) => (
     <button
       key={title}
@@ -263,22 +270,45 @@ export default function TaskDetailPanel({
     >{content}</button>
   );
 
+  const commitEditorHtml = (editorRef: React.RefObject<HTMLDivElement | null>) => {
+    const html = editorRef.current?.innerHTML ?? "";
+    const existing = task.memos?.[0];
+    onUpdate({ memos: [{ id: existing?.id ?? `memo_${Date.now()}`, label: "メモ①", html, checklist: existing?.checklist ?? [], attachments: existing?.attachments ?? [] }] });
+  };
+
+  const insertNodeAtCaret = (node: Node, editorRef: React.RefObject<HTMLDivElement | null>) => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents(); range.insertNode(node);
+      range.setStartAfter(node); range.collapse(true);
+      sel.removeAllRanges(); sel.addRange(range);
+    } else { editorRef.current?.appendChild(node); }
+  };
+
   const handleMemoPaste = (e: React.ClipboardEvent, editorRef: React.RefObject<HTMLDivElement | null>) => {
+    // 画像の貼り付け: フル解像度base64を圧縮してから挿入（保存サイズ肥大化防止）
+    const imgItem = Array.from(e.clipboardData.items).find(it => it.type.startsWith("image/"));
+    if (imgItem) {
+      const file = imgItem.getAsFile();
+      if (file) {
+        e.preventDefault();
+        fileToCompressedDataUrl(file).then(dataUrl => {
+          const img = document.createElement("img");
+          img.src = dataUrl; img.style.maxWidth = "100%"; img.className = "memo-image";
+          insertNodeAtCaret(img, editorRef);
+          commitEditorHtml(editorRef);
+        });
+      }
+      return;
+    }
     const text = e.clipboardData.getData("text/plain").trim();
     if (!/^https?:\/\/\S+$/.test(text)) return;
     e.preventDefault();
     const a = document.createElement("a");
     a.href = text; a.textContent = text;
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents(); range.insertNode(a);
-      range.setStartAfter(a); range.collapse(true);
-      sel.removeAllRanges(); sel.addRange(range);
-    } else { editorRef.current?.appendChild(a); }
-    const html = editorRef.current?.innerHTML ?? "";
-    const existing = task.memos?.[0];
-    onUpdate({ memos: [{ id: existing?.id ?? `memo_${Date.now()}`, label: "メモ①", html, checklist: existing?.checklist ?? [], attachments: existing?.attachments ?? [] }] });
+    insertNodeAtCaret(a, editorRef);
+    commitEditorHtml(editorRef);
   };
 
   const saveMemoRange = () => {
@@ -447,24 +477,26 @@ export default function TaskDetailPanel({
     const files = Array.from(e.target.files ?? []);
     files.forEach(file => {
       const isImage = file.type.startsWith("image/");
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const dataUrl = evt.target?.result as string;
-        if (isImage) {
+      if (isImage) {
+        // 画像は縮小・圧縮して埋め込む（保存サイズ超過を防ぐ）
+        fileToCompressedDataUrl(file).then(dataUrl => {
           const img = document.createElement("img");
           img.src = dataUrl;
           img.style.maxWidth = "100%";
-          img.style.width = "320px";
           img.className = "memo-image";
           memoEditorRef.current?.appendChild(img);
           commitMemoHtml();
-        } else {
+        });
+      } else {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const dataUrl = evt.target?.result as string;
           const existing = task.memos?.[0];
           const newAtt = { id: `att_${Date.now()}`, name: file.name, size: file.size, dataUrl };
           onUpdate({ memos: [{ id: existing?.id ?? `memo_${Date.now()}`, label: "メモ①", html: memoEditorRef.current?.innerHTML ?? existing?.html ?? "", checklist: existing?.checklist ?? [], attachments: [...(existing?.attachments ?? []), newAtt] }] });
-        }
-      };
-      reader.readAsDataURL(file);
+        };
+        reader.readAsDataURL(file);
+      }
     });
     e.target.value = "";
   };
