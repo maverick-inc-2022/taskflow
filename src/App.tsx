@@ -662,14 +662,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       } | null;
       if (!data) return;
 
-      // 未保存の変更(dirty)が残っている場合のみ、クラウドで上書きせずローカルを
-      // 採用してクラウドへ押し上げる。localの時刻が新しいだけでは上書きしない
-      // （localStorage書き込み失敗などで古いローカルが誤ってクラウドを潰すのを防ぐ）。
+      // 「最後に更新した方が勝つ」: 更新時刻で新しい方を採用する。
+      // ローカルの方が新しければローカルを採用してクラウドへ押し上げ、
+      // クラウドの方が新しければ（＝別端末で後から更新）クラウドを採用する。
       const cloudTs = Number(data.settings?._ts ?? 0);
-      if (dirtyRef.current) {
-        // 未保存の変更を優先してクラウドへ押し上げる。ただしローカルで空になった
-        // メモにクラウド側の中身が残っていれば、それを取り込んでから押し上げる
-        // （空ローカルが復元済みクラウドを再び潰すのを防ぐ）。
+      if (localTsRef.current > cloudTs) {
+        // ローカルが新しい。ただしローカルで空になったメモにクラウド側の中身が
+        // 残っていれば取り込んでから押し上げる（空でメモを潰さない安全策）。
         const cloudTaskById = new Map((data.tasks ?? []).map((ct) => [ct.id, ct]));
         const firstH = (t?: Task) => (t?.memos && t.memos[0]?.html) || "";
         const mergedTasks = tasks.map((lt) => {
@@ -682,7 +681,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         setTasks(mergedTasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(mergedTasks));
         return;
       }
-      // クラウドを採用するので、ローカルの時刻もクラウドに合わせる
+      // クラウドの方が新しい/同等 → クラウドを採用。ローカル時刻も合わせる。
       setLocalTs(cloudTs);
 
       // ── メモ保護マージ ──

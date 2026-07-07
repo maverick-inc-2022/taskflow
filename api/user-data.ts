@@ -40,9 +40,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       email: string;
       tasks: unknown;
       memos: unknown;
-      settings: unknown;
+      settings: (Record<string, unknown> & { _ts?: number }) | null;
     };
     if (!email) return res.status(400).json({ error: "missing email" });
+
+    // 「最後に更新した方が勝つ」: 受信データの更新時刻(_ts)が、クラウドの
+    // 現在値より古ければ上書きしない（別端末の新しい編集を守る）。
+    const incomingTs = Number(settings?._ts ?? 0);
+    if (incomingTs > 0) {
+      const { data: cur } = await supabase
+        .from("user_data")
+        .select("settings")
+        .eq("email", email)
+        .single();
+      const existingTs = Number((cur?.settings as { _ts?: number } | null)?._ts ?? 0);
+      if (existingTs > incomingTs) {
+        // 古い保存は棄却（クラウドの新しいデータを保持）。clientはエラーにしない。
+        return res.status(200).json({ ok: true, skipped: "stale" });
+      }
+    }
 
     const { error } = await supabase.from("user_data").upsert(
       { email, tasks, memos, settings, updated_at: new Date().toISOString() },
