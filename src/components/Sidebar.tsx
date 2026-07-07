@@ -617,6 +617,8 @@ export default function Sidebar({
             {!collapsed && <span className="min-w-0 flex-1 truncate text-left font-medium">{profile.name}</span>}
           </button>
         )}
+        {/* アプリのバージョン表示（どの端末がどの版を動かしているかの確認用） */}
+        {!collapsed && <p className="px-3 pb-1 text-[10px] text-slate-300">sync v2</p>}
       </div>
     </aside>
   );

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
+import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
 import { AvatarDisplay } from "./avatarIcons";
 import Sidebar, { type View } from "./components/Sidebar";
 import TaskItem from "./components/TaskItem";
@@ -63,6 +64,15 @@ import {
   SettingsIcon,
   TableIcon,
 } from "./icons";
+
+// ── リアルタイム同期用 Supabase クライアント ─────────────────────────────
+// publishable キーはクライアント配布前提の公開キー（秘密キーはサーバー側のみ）。
+// データの読み書きは従来どおり /api/user-data 経由で、ここは「保存したよ」の
+// 通知（broadcast）にだけ使う。
+const sbRealtime = createClient(
+  "https://mjmejuuxtpzxudlmjfas.supabase.co",
+  "sb_publishable_36S573KDMp6aVh0RzWhJ-g_n-qXLP4u",
+);
 
 const layoutOptions: { id: LayoutMode; label: string; icon: typeof ListIcon }[] =
   [
@@ -628,14 +638,25 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   // クラウド未反映の変更フラグ。前回セッションの保存が間に合わなかった場合、
   // 起動時にクラウドの古いデータでローカルを上書きしないためのガード。
   const dirtyRef = useRef(localStorage.getItem('taskflow_dirty') === '1');
+  // クラウドから取り込んだ変更が autosave を発火させて再保存される「エコー」を防ぐ。
+  // これがないと2台の端末が pull→save→相手が pull→save… の無限ループになる。
+  // クラウド反映で setState に渡した参照を記録し、autosave 側で参照比較して判定する。
+  const lastCloudAppliedRef = useRef<{
+    tasks?: unknown; memos?: unknown; settings?: unknown; profile?: unknown;
+    people?: unknown; projects?: unknown; memoCategories?: unknown; trash?: unknown;
+  }>({});
   const markDirty = () => { dirtyRef.current = true; try { localStorage.setItem('taskflow_dirty', '1'); } catch { /* noop */ } };
   const clearDirty = () => { dirtyRef.current = false; try { localStorage.removeItem('taskflow_dirty'); } catch { /* noop */ } };
   // ローカルデータの最終更新時刻(ms)。クラウドの時刻と比較して「新しい方」を採用する。
   const localTsRef = useRef<number>(Number(localStorage.getItem('taskflow_updated_at') || 0));
-  const bumpLocalTs = () => { const t = Date.now(); localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
+  // クロックスキュー対策: クライアント時計がサーバーより遅れていても、
+  // 直前に採用したサーバー時刻より必ず大きくなるよう単調増加にする
+  const bumpLocalTs = () => { const t = Math.max(Date.now(), localTsRef.current + 1); localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
   const setLocalTs = (t: number) => { localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
   // 保存世代カウンタ: 保存中に新しい編集が入ったら、その保存でdirtyを消さない
   const saveGenRef = useRef(0);
+  // リアルタイム同期チャンネル（同一アカウントの他端末へ保存を即時通知）
+  const syncChannelRef = useRef<RealtimeChannel | null>(null);
 
   const apiHeaders = (): Record<string, string> => {
     const secret = import.meta.env.VITE_API_SECRET as string | undefined;
@@ -666,8 +687,11 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       // ローカルの方が新しければローカルを採用してクラウドへ押し上げ、
       // クラウドの方が新しければ（＝別端末で後から更新）クラウドを採用する。
       const cloudTs = Number(data.settings?._ts ?? 0);
-      if (localTsRef.current > cloudTs) {
-        // ローカルが新しい。ただしローカルで空になったメモにクラウド側の中身が
+      // 「ローカルが新しい」条件: タイムスタンプが新しい かつ 未保存の変更がある
+      // dirtyRef なしでタイムスタンプだけで判定すると、クロックスキューで
+      // 古いデータを持つデバイスがクラウドを上書きしてしまう（多端末バグの根本原因）
+      if (dirtyRef.current && localTsRef.current > cloudTs) {
+        // ローカルに未保存の変更がある。ローカルで空になったメモにクラウド側の中身が
         // 残っていれば取り込んでから押し上げる（空でメモを潰さない安全策）。
         const cloudTaskById = new Map((data.tasks ?? []).map((ct) => [ct.id, ct]));
         const firstH = (t?: Task) => (t?.memos && t.memos[0]?.html) || "";
@@ -681,9 +705,16 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         setTasks(mergedTasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(mergedTasks));
         return;
       }
+      // 初回ロード後のポーリング/フォーカス時: クラウドに変更がなければ何もしない
+      // （毎回 setState すると autosave が発火して無限に再保存されるため必須）
+      if (cloudHydratedRef.current && cloudTs <= localTsRef.current) return;
       // クラウドの方が新しい/同等 → クラウドを採用。ローカル時刻も合わせる。
+      // 上書き前に現在のローカルデータをスナップショットとして保存（「戻す」用）
+      if (cloudTs > localTsRef.current) pushSnapshot("クラウド同期前");
       setLocalTs(cloudTs);
-
+      // クラウドを採用した時点でローカルの dirty フラグは意味を失う。残したままだと
+      // 以後のポーリング/フォーカス時 pull がずっとスキップされ「反映されない」状態になる
+      clearDirty();
       // ── メモ保護マージ ──
       // クラウド側のメモが空でも、ローカルに中身が残っていれば消さずに残す。
       // （事故でクラウドが空に上書きされても、まだ中身を持つ端末で開けば復元される）
@@ -705,14 +736,19 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         }
       }
 
-      if (data.tasks) { seedCounters(data.tasks); setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
-      if (data.memos) { setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
+      // クラウド反映で使う「参照そのもの」を記録しておく。autosave 側は
+      // 全 state がこの参照と一致していれば「クラウド反映による発火」と判定して
+      // 保存しない（エコー防止）。boolean フラグと違い、Reactのバッチングや
+      // 同時に走った複数の pull でも壊れない。
+      const applied = lastCloudAppliedRef.current;
+      if (data.tasks) { seedCounters(data.tasks); applied.tasks = data.tasks; setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
+      if (data.memos) { applied.memos = data.memos; setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
       if (data.settings) {
         const { _profile, _people, _projects, _memoCategories, _trash, _ts, ...actualSettings } = data.settings;
         void _ts;
-        setSettings(s => ({ ...s, ...actualSettings }));
-        if (_profile) setProfile(_profile);
-        if (_people) setPeople(dedupeById(applyGoogleUserToMe(_people)));
+        setSettings(s => { const next = { ...s, ...actualSettings }; lastCloudAppliedRef.current.settings = next; return next; });
+        if (_profile) { applied.profile = _profile; setProfile(_profile); }
+        if (_people) { const next = dedupeById(applyGoogleUserToMe(_people)); applied.people = next; setPeople(next); }
         if (_projects) {
           // Deduplicate by id (guard against double-save bugs)
           const seen = new Set<string>();
@@ -725,10 +761,11 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           } else {
             deduped.push(holdDef);
           }
+          applied.projects = deduped;
           setProjects(deduped);
         }
-        if (_memoCategories) setMemoCategories(_memoCategories);
-        if (_trash) { setTrash(_trash); localStorage.setItem('taskflow_trash', JSON.stringify(_trash)); }
+        if (_memoCategories) { applied.memoCategories = _memoCategories; setMemoCategories(_memoCategories); }
+        if (_trash) { applied.trash = _trash; setTrash(_trash); localStorage.setItem('taskflow_trash', JSON.stringify(_trash)); }
       }
 
       // ローカルから復元したメモがあれば、クラウドへ書き戻して確定させる
@@ -765,6 +802,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         headers: { "Content-Type": "application/json", ...apiHeaders() },
         body: JSON.stringify({
           email,
+          clientV: 2,
           tasks: snapshot.tasks,
           memos: snapshot.memos,
           settings: {
@@ -778,9 +816,26 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           },
         }),
       });
-      setSyncStatus(res.ok ? "saved" : "error");
-      // 保存中に新しい編集が入っていなければ dirty を解除（取りこぼし防止）
-      if (res.ok && saveGenRef.current === gen) clearDirty();
+      if (res.ok) {
+        setSyncStatus("saved");
+        try {
+          const json = await res.json() as { serverTs?: number; skipped?: string };
+          if (json.skipped) {
+            // 自分のデータの方が古くて棄却された → クラウドの新しいデータを取り込む
+            if (saveGenRef.current === gen) { clearDirty(); loadFromCloud(email); }
+            return;
+          }
+          // サーバーが割り当てたタイムスタンプを localTs として採用（クロックスキュー対策）
+          if (json.serverTs) setLocalTs(json.serverTs);
+          // 他端末へ「保存したよ」を即時通知（受信側はすぐ pull する）
+          try {
+            syncChannelRef.current?.send({ type: "broadcast", event: "updated", payload: { ts: json.serverTs } });
+          } catch { /* 通知失敗はポーリングが拾う */ }
+        } catch { /* ignore parse error */ }
+        if (saveGenRef.current === gen) clearDirty();
+      } else {
+        setSyncStatus("error");
+      }
     } catch { setSyncStatus("error"); }
   };
 
@@ -815,7 +870,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     // Wipe local cache so the next account cannot see this account's data
     const keysToRemove = [
       'taskflow_tasks_v2', 'taskflow_memos', 'taskflow_settings',
-      'taskflow_trash', 'taskflow_banner_dismissed',
+      'taskflow_trash', 'taskflow_projects', 'taskflow_banner_dismissed',
       'taskflow_gcal_token', 'taskflow_gmail_token',
     ];
     keysToRemove.forEach(k => localStorage.removeItem(k));
@@ -849,7 +904,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     setPeople((ps) => ps.map((p) => (p.id === id ? { ...p, name, avatar } : p)));
 
   // Projects (stateful for color editing + adding new)
-  const [projects, setProjects] = useState<Project[]>(defaultProjects);
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      const raw = localStorage.getItem('taskflow_projects');
+      if (raw) return JSON.parse(raw) as Project[];
+    } catch { /* ignore */ }
+    return defaultProjects;
+  });
   const addProject = (label: string, color: string, icon: string) => {
     const id = uniqueId("proj");
     setProjects((ps) => [...ps, { id, label, color, icon }]);
@@ -875,6 +936,9 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     if (id === HOLD_PROJECT_ID) return;
     setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
+  useEffect(() => {
+    try { localStorage.setItem('taskflow_projects', JSON.stringify(projects)); } catch { /* ignore */ }
+  }, [projects]);
 
   const renameMemoCategory = (id: string, name: string) =>
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
@@ -886,14 +950,76 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   useEffect(() => {
     if (!syncedEmail) return;
     if (!cloudHydratedRef.current) return;
-    // マウント直後（ロード反映による発火）はユーザー編集ではないので時刻を進めない
-    if (isFirstAutosave.current) { isFirstAutosave.current = false; }
-    else { markDirty(); saveGenRef.current++; bumpLocalTs(); }
+    // クラウドから取り込んだ反映はユーザー編集ではない → 保存し直さない（エコー防止）。
+    // 「全 state がクラウド反映時に渡した参照と一致」＝この発火はクラウド反映によるもの。
+    // ユーザーが1つでも編集していれば参照が変わるので通常の保存パスに入る。
+    const lc = lastCloudAppliedRef.current;
+    const isCloudApply =
+      (lc.tasks === undefined || lc.tasks === tasks) &&
+      (lc.memos === undefined || lc.memos === memos) &&
+      (lc.settings === undefined || lc.settings === settings) &&
+      (lc.profile === undefined || lc.profile === profile) &&
+      (lc.people === undefined || lc.people === people) &&
+      (lc.projects === undefined || lc.projects === projects) &&
+      (lc.memoCategories === undefined || lc.memoCategories === memoCategories) &&
+      (lc.trash === undefined || lc.trash === trash) &&
+      Object.values(lc).some(v => v !== undefined);
+    if (isCloudApply) { isFirstAutosave.current = false; return; }
+    // マウント直後（ロード反映による発火）はユーザー編集ではないので保存しない
+    if (isFirstAutosave.current) { isFirstAutosave.current = false; return; }
+    markDirty(); saveGenRef.current++; bumpLocalTs();
     const t = setTimeout(() => saveToCloud(syncedEmail, {
       tasks, memos, settings, profile, people, projects, memoCategories, trash,
     }), 800);
     return () => clearTimeout(t);
   }, [tasks, memos, settings, profile, people, projects, memoCategories, trash, syncedEmail]);
+
+  // ── 他端末の変更を自動反映 ──────────────────────────────────────────────
+  // タブに戻ったとき（スマホで開き直したとき）と、開いたままでも30秒ごとに
+  // クラウドをチェックして、新しければ取り込む。
+  const loadFromCloudRef = useRef(loadFromCloud);
+  loadFromCloudRef.current = loadFromCloud;
+  useEffect(() => {
+    if (!syncedEmail) return;
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      if (!cloudHydratedRef.current) return;   // 初回ロードが終わるまで待つ
+      if (dirtyRef.current) return;            // 未保存の編集がある間は pull しない（直後の autosave で push される）
+      loadFromCloudRef.current(syncedEmail);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    // スマホ: bfcache（戻る/アプリ切替でのページ復元）から復帰したときにも取得する
+    window.addEventListener("pageshow", refresh);
+    const iv = window.setInterval(refresh, 30_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.clearInterval(iv);
+    };
+  }, [syncedEmail]);
+
+  // ── リアルタイム同期 ──────────────────────────────────────────────────
+  // 同じアカウントでログイン中の端末同士を broadcast チャンネルで接続。
+  // どれかの端末が保存すると全端末に通知が飛び、受信側は即クラウドから取得する。
+  // （通知が届かないケースは上の30秒ポーリング／フォーカス時取得がカバー）
+  useEffect(() => {
+    if (!syncedEmail) return;
+    const ch = sbRealtime.channel(`taskflow-sync-${syncedEmail}`, {
+      config: { broadcast: { self: false } },
+    });
+    ch.on("broadcast", { event: "updated" }, () => {
+      if (dirtyRef.current) return; // 未保存の編集がある間は pull しない
+      loadFromCloudRef.current(syncedEmail);
+    });
+    ch.subscribe();
+    syncChannelRef.current = ch;
+    return () => {
+      syncChannelRef.current = null;
+      sbRealtime.removeChannel(ch);
+    };
+  }, [syncedEmail]);
 
   // 最新状態への参照（ページ離脱時のフラッシュ送信用）
   const snapshotRef = useRef({ tasks, memos, settings, profile, people, projects, memoCategories, trash });
@@ -907,9 +1033,11 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     const flush = () => {
       const email = syncedEmailRef.current;
       if (!email || !cloudHydratedRef.current) return;
+      if (!dirtyRef.current) return; // 未保存の変更がなければ送らない（エコー防止）
       const s = snapshotRef.current;
       const body = JSON.stringify({
         email,
+        clientV: 2,
         tasks: s.tasks,
         memos: s.memos,
         settings: {
@@ -1607,10 +1735,10 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
 
           <div className="flex-1" />
 
-          {/* 保存状態インジケーター */}
+          {/* 保存状態インジケーター — モバイルは非表示 */}
           {syncedEmail && (
             syncStatus === "saving" ? (
-              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              <span className="hidden sm:flex shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
                 <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -1618,14 +1746,14 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
                 保存中…
               </span>
             ) : syncStatus === "error" ? (
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-500">
+              <span className="hidden sm:flex shrink-0 items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-500">
                 <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
                 保存エラー
               </span>
             ) : (
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-600">
+              <span className="hidden sm:flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-600">
                 <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m20 6-11 11-5-5"/>
                 </svg>
