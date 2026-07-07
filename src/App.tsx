@@ -653,6 +653,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   // 直前に採用したサーバー時刻より必ず大きくなるよう単調増加にする
   const bumpLocalTs = () => { const t = Math.max(Date.now(), localTsRef.current + 1); localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
   const setLocalTs = (t: number) => { localTsRef.current = t; try { localStorage.setItem('taskflow_updated_at', String(t)); } catch { /* noop */ } };
+  // 設定系（プロジェクト/担当者/カテゴリ/プロフィール）専用の更新時刻。
+  // タスク編集で「端末が新しい」と判定されても、設定はこの時刻で別々に新旧を判定する。
+  // これがないと、片方の端末がタスクを触るたびに古いデフォルト設定を保持し、
+  // もう片方で設定した内容（例: プロジェクト名AIC）が反映されない。
+  const cfgTsRef = useRef<number>(Number(localStorage.getItem('taskflow_cfg_ts') || 0));
+  const bumpCfgTs = () => { const t = Math.max(Date.now(), cfgTsRef.current + 1); cfgTsRef.current = t; try { localStorage.setItem('taskflow_cfg_ts', String(t)); } catch { /* noop */ } };
+  const setCfgTs = (t: number) => { cfgTsRef.current = t; try { localStorage.setItem('taskflow_cfg_ts', String(t)); } catch { /* noop */ } };
   // 保存世代カウンタ: 保存中に新しい編集が入ったら、その保存でdirtyを消さない
   const saveGenRef = useRef(0);
   // リアルタイム同期チャンネル（同一アカウントの他端末へ保存を即時通知）
@@ -679,9 +686,34 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           _memoCategories?: MemoCategory[];
           _trash?: Task[];
           _ts?: number;
+          _cfgTs?: number;
         };
       } | null;
       if (!data) return;
+
+      const applied = lastCloudAppliedRef.current;
+
+      // ── 設定系の同期（タスクの _ts とは独立した _cfgTs で新旧判定） ──
+      // クラウドの設定が新しければ、タスクのタイムスタンプに関係なく必ず採用する。
+      // effXxx は下の push でも使う「実効設定」（採用したらクラウド版、しなければローカル版）。
+      const cloudCfgTs = Number(data.settings?._cfgTs ?? 0);
+      let effProjects = projects, effPeople = people, effMemoCats = memoCategories, effProfile = profile;
+      if (data.settings && cloudCfgTs > cfgTsRef.current) {
+        const cs = data.settings;
+        if (cs._projects) {
+          const seen = new Set<string>();
+          const deduped = cs._projects.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
+          const holdDef = defaultProjects.find(p => p.id === HOLD_PROJECT_ID)!;
+          const hi = deduped.findIndex(p => p.id === HOLD_PROJECT_ID);
+          if (hi >= 0) deduped[hi] = { ...deduped[hi], color: holdDef.color, label: holdDef.label, icon: holdDef.icon };
+          else deduped.push(holdDef);
+          effProjects = deduped; applied.projects = deduped; setProjects(deduped);
+        }
+        if (cs._people) { const n = dedupeById(applyGoogleUserToMe(cs._people)); effPeople = n; applied.people = n; setPeople(n); }
+        if (cs._memoCategories) { effMemoCats = cs._memoCategories; applied.memoCategories = cs._memoCategories; setMemoCategories(cs._memoCategories); }
+        if (cs._profile) { effProfile = cs._profile; applied.profile = cs._profile; setProfile(cs._profile); }
+        setCfgTs(cloudCfgTs);
+      }
 
       // 「最後に更新した方が勝つ」: 更新時刻で新しい方を採用する。
       // ローカルの方が新しければローカルを採用してクラウドへ押し上げ、
@@ -701,7 +733,9 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
           return lt;
         });
         cloudHydratedRef.current = true;
-        saveToCloud(email, { tasks: mergedTasks, memos, settings, profile, people, projects, memoCategories, trash });
+        // 設定系は上で実効値(effXxx)に揃えているので、それを push（ローカルの
+        // 古いデフォルト設定でクラウドの設定を潰さない）。
+        saveToCloud(email, { tasks: mergedTasks, memos, settings, profile: effProfile, people: effPeople, projects: effProjects, memoCategories: effMemoCats, trash });
         setTasks(mergedTasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(mergedTasks));
         return;
       }
@@ -740,31 +774,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
       // 全 state がこの参照と一致していれば「クラウド反映による発火」と判定して
       // 保存しない（エコー防止）。boolean フラグと違い、Reactのバッチングや
       // 同時に走った複数の pull でも壊れない。
-      const applied = lastCloudAppliedRef.current;
+      // ※設定系(projects/people/memoCategories/profile)は上の _cfgTs ブロックで処理済み。
       if (data.tasks) { seedCounters(data.tasks); applied.tasks = data.tasks; setTasks(data.tasks); localStorage.setItem('taskflow_tasks_v2', JSON.stringify(data.tasks)); }
       if (data.memos) { applied.memos = data.memos; setMemos(data.memos); localStorage.setItem('taskflow_memos', JSON.stringify(data.memos)); }
       if (data.settings) {
-        const { _profile, _people, _projects, _memoCategories, _trash, _ts, ...actualSettings } = data.settings;
-        void _ts;
+        const { _profile, _people, _projects, _memoCategories, _trash, _ts, _cfgTs, ...actualSettings } = data.settings;
+        void _ts; void _cfgTs; void _profile; void _people; void _projects; void _memoCategories;
         setSettings(s => { const next = { ...s, ...actualSettings }; lastCloudAppliedRef.current.settings = next; return next; });
-        if (_profile) { applied.profile = _profile; setProfile(_profile); }
-        if (_people) { const next = dedupeById(applyGoogleUserToMe(_people)); applied.people = next; setPeople(next); }
-        if (_projects) {
-          // Deduplicate by id (guard against double-save bugs)
-          const seen = new Set<string>();
-          const deduped = _projects.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
-          // 保留プロジェクトは常に末尾に保持し、色・ラベル・アイコンを固定値に上書き
-          const holdDef = defaultProjects.find(p => p.id === HOLD_PROJECT_ID)!;
-          const holdIdx = deduped.findIndex(p => p.id === HOLD_PROJECT_ID);
-          if (holdIdx >= 0) {
-            deduped[holdIdx] = { ...deduped[holdIdx], color: holdDef.color, label: holdDef.label, icon: holdDef.icon };
-          } else {
-            deduped.push(holdDef);
-          }
-          applied.projects = deduped;
-          setProjects(deduped);
-        }
-        if (_memoCategories) { applied.memoCategories = _memoCategories; setMemoCategories(_memoCategories); }
         if (_trash) { applied.trash = _trash; setTrash(_trash); localStorage.setItem('taskflow_trash', JSON.stringify(_trash)); }
       }
 
@@ -813,6 +829,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
             _memoCategories: snapshot.memoCategories,
             _trash: snapshot.trash,
             _ts: ts,
+            _cfgTs: cfgTsRef.current,
           },
         }),
       });
@@ -939,6 +956,23 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   useEffect(() => {
     try { localStorage.setItem('taskflow_projects', JSON.stringify(projects)); } catch { /* ignore */ }
   }, [projects]);
+
+  // 設定系（プロジェクト/担当者/カテゴリ/プロフィール）が「ユーザー操作で」変わったら
+  // _cfgTs を進める。クラウド反映(applied参照と一致)では進めない＝エコー防止。
+  const prevCfgRef = useRef({ projects, people, memoCategories, profile });
+  useEffect(() => {
+    if (!cloudHydratedRef.current) { prevCfgRef.current = { projects, people, memoCategories, profile }; return; }
+    const prev = prevCfgRef.current;
+    const lc = lastCloudAppliedRef.current;
+    const genuine =
+      (projects !== prev.projects && lc.projects !== projects) ||
+      (people !== prev.people && lc.people !== people) ||
+      (memoCategories !== prev.memoCategories && lc.memoCategories !== memoCategories) ||
+      (profile !== prev.profile && lc.profile !== profile);
+    prevCfgRef.current = { projects, people, memoCategories, profile };
+    if (genuine) bumpCfgTs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, people, memoCategories, profile]);
 
   const renameMemoCategory = (id: string, name: string) =>
     setMemoCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
