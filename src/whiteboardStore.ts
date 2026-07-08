@@ -23,9 +23,17 @@ export interface WBConnection {
   to: string;     // item id
 }
 
+export interface WBStroke {
+  id: string;
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+}
+
 export interface BoardData {
   items: WBItem[];
   connections: WBConnection[];
+  drawings?: WBStroke[];
 }
 
 export interface BoardMeta { id: string; title: string; }
