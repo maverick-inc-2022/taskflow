@@ -23,6 +23,7 @@ import CalendarView from "./components/CalendarView";
 import TableView from "./components/TableView";
 import RepeatTasksView from "./components/RepeatTasksView";
 import MemoView, { BUILTIN_CATEGORIES } from "./components/MemoView";
+import Whiteboard from "./components/Whiteboard";
 import {
   defaultProfile,
   defaultProjects,
@@ -318,7 +319,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
 
   // ── Main mode: tasks ↔ memos ──
-  const [mainMode, setMainMode] = useState<"tasks" | "memos">("tasks");
+  const [mainMode, setMainMode] = useState<"tasks" | "memos" | "whiteboard">("tasks");
 
   // ── Sticky memos ──
   const [memos, setMemos] = useState<StickyMemo[]>(() => {
@@ -1629,7 +1630,7 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
     onUpdateProject: updateProject,
     onReorderProjects: reorderProjects,
     onDeleteProject: deleteProject,
-    mainMode, onChangeMainMode: (mode: "tasks" | "memos") => { setMainMode(mode); if (mode === "memos") setRightOpen(false); },
+    mainMode, onChangeMainMode: (mode: "tasks" | "memos" | "whiteboard") => { setMainMode(mode); if (mode !== "tasks") setRightOpen(false); },
     memoCategories, memoCounts, memoFilter,
     onAddMemo: addMemo, onChangeMemoFilter: setMemoFilter,
     onAddMemoCategory: addMemoCategory, onDeleteMemoCategory: deleteMemoCategory, onRenameMemoCategory: renameMemoCategory, onRecolorMemoCategory: recolorMemoCategory,
@@ -1685,7 +1686,13 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
             <span className="whitespace-nowrap text-base font-semibold text-slate-700">
               {periodLabel}
             </span>
-          ) : mainMode === "tasks" ? null : (
+          ) : mainMode === "tasks" ? null : mainMode === "whiteboard" ? (
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-base font-semibold text-slate-700">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              ホワイトボード
+              <span className="text-xs font-normal text-slate-400">(このPCのみ・ローカル保存)</span>
+            </span>
+          ) : (
             /* メモモード: タイトル + フィルタータブ */
             <div className="flex min-w-0 items-center gap-2">
               <span className="whitespace-nowrap text-base font-semibold text-slate-700">メモ</span>
@@ -1890,7 +1897,10 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
         )}
 
         <main className="flex-1 overflow-hidden">
-        {/* Body — resizable two-column */}
+        {mainMode === "whiteboard" ? (
+          <Whiteboard />
+        ) : (
+        /* Body — resizable two-column */
         <div ref={bodyRef} className="flex h-full">
           {/* Left column — scrolls independently */}
           <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0">
@@ -2133,7 +2143,8 @@ function AppInner({ onGoogleLogout, googleUser }: { onGoogleLogout: () => void; 
             );
           })()}
 
-        </div>{/* end body flex row */}
+        </div>
+        )}
         </main>
 
         {/* Mobile bottom navigation bar */}
