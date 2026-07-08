@@ -15,6 +15,8 @@ const SHAPES: { id: WBShape; label: string }[] = [
   { id: "rect", label: "□" }, { id: "round", label: "▢" }, { id: "ellipse", label: "○" }, { id: "diamond", label: "◇" },
 ];
 
+interface Snap { items: WBItem[]; connections: WBConnection[]; drawings: WBStroke[]; }
+
 let seq = 0;
 const uid = (p = "wb") => `${p}_${Date.now().toString(36)}${(seq++).toString(36)}`;
 const strokePath = (pts: { x: number; y: number }[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x} ${p.y}`).join(" ");
@@ -40,7 +42,7 @@ export default function Whiteboard() {
   const [connectDraft, setConnectDraft] = useState<{ from: string; x: number; y: number } | null>(null);
   const [liveStroke, setLiveStroke] = useState<{ points: { x: number; y: number }[]; color: string; width: number } | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [tool, setTool] = useState<"select" | "pen">("select");
+  const [tool, setTool] = useState<"select" | "pen" | "eraser">("select");
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,6 +53,21 @@ export default function Whiteboard() {
   const zoomRef = useRef(1); zoomRef.current = zoom;
   const toolRef = useRef(tool); toolRef.current = tool;
   const penColorRef = useRef(penColor); penColorRef.current = penColor;
+
+  // ── 履歴（Undo/Redo） ──
+  const itemsRef = useRef(items); itemsRef.current = items;
+  const connRef = useRef(connections); connRef.current = connections;
+  const drawRef = useRef(drawings); drawRef.current = drawings;
+  const undoRef = useRef<Snap[]>([]);
+  const redoRef = useRef<Snap[]>([]);
+  const [, setHistVer] = useState(0);
+  const bumpHist = () => setHistVer((v) => v + 1);
+  const snap = (): Snap => ({ items: itemsRef.current, connections: connRef.current, drawings: drawRef.current });
+  const pushHistory = () => { undoRef.current.push(snap()); if (undoRef.current.length > 60) undoRef.current.shift(); redoRef.current = []; bumpHist(); };
+  const applySnap = (s: Snap) => { setItems(s.items); setConnections(s.connections); setDrawings(s.drawings); setSelectedId(null); setEditingId(null); };
+  const undo = () => { if (!undoRef.current.length) return; redoRef.current.push(snap()); applySnap(undoRef.current.pop()!); bumpHist(); };
+  const redo = () => { if (!redoRef.current.length) return; undoRef.current.push(snap()); applySnap(redoRef.current.pop()!); bumpHist(); };
+  const clearHistory = () => { undoRef.current = []; redoRef.current = []; bumpHist(); };
   const pendingScroll = useRef<{ cx: number; cy: number; nz: number } | null>(null);
   const didInitScroll = useRef(false);
 
@@ -134,6 +151,7 @@ export default function Whiteboard() {
     setItems(data.items); setConnections(data.connections); setDrawings(data.drawings ?? []);
     seq = data.items.reduce((m, it) => Math.max(m, it.z ?? 0), 0) + 1;
     setIndex((idx) => { if (!idx) return idx; const n = { ...idx, activeId: id }; saveIndex(n); return n; });
+    clearHistory();
   };
   const addBoard = () => {
     if (!index) return;
@@ -144,6 +162,7 @@ export default function Whiteboard() {
     activeIdRef.current = id;
     setIndex(idx); saveIndex(idx);
     setItems([]); setConnections([]); setDrawings([]); setSelectedId(null); setEditingId(null);
+    clearHistory();
   };
   const renameBoard = (id: string, title: string) =>
     setIndex((idx) => { if (!idx) return idx; const n = { ...idx, boards: idx.boards.map(b => b.id === id ? { ...b, title } : b) }; saveIndex(n); return n; });
@@ -169,11 +188,13 @@ export default function Whiteboard() {
     return { x: (el.scrollLeft + el.clientWidth / 2) / zoomRef.current, y: (el.scrollTop + el.clientHeight / 2) / zoomRef.current };
   };
   const addText = () => {
+    pushHistory();
     const c = viewCenterCanvas(); const id = uid();
     setItems((prev) => [...prev, { id, type: "text", x: c.x - 90, y: c.y - 30, w: 180, text: "", color: TEXT_COLORS[0], shape: "rect", z: topZ() }]);
     setSelectedId(id); setEditingId(id); setTool("select");
   };
   const addImage = useCallback((src: string) => {
+    pushHistory();
     setItems((prev) => {
       const el = containerRef.current;
       const cx = el ? (el.scrollLeft + el.clientWidth / 2) / zoomRef.current - 160 : ORIGIN_X;
@@ -184,6 +205,7 @@ export default function Whiteboard() {
   }, []);
   const update = (id: string, patch: Partial<WBItem>) => setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   const remove = (id: string) => {
+    pushHistory();
     setItems((prev) => prev.filter((it) => it.id !== id));
     setConnections((prev) => prev.filter((c) => c.from !== id && c.to !== id));
     setSelectedId((s) => (s === id ? null : s)); setEditingId((e) => (e === id ? null : e));
@@ -202,12 +224,16 @@ export default function Whiteboard() {
     return () => window.removeEventListener("paste", onPaste);
   }, [editingId, addImage]);
 
-  // Deleteキー
+  // Deleteキー / Undo・Redo
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (editingId) return;
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const typing = editingId || tag === "INPUT" || tag === "TEXTAREA";
+      if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault(); if (e.shiftKey) redo(); else undo(); return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redo(); return; }
+      if (typing) return;
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) { e.preventDefault(); remove(selectedId); }
     };
     window.addEventListener("keydown", onKey);
@@ -221,14 +247,16 @@ export default function Whiteboard() {
     e.stopPropagation(); e.preventDefault();
     const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y, id = it.id, z = zoomRef.current;
     setSelectedId(id); update(id, { z: topZ() });
-    const move = (ev: PointerEvent) => update(id, { x: ox + (ev.clientX - sx) / z, y: oy + (ev.clientY - sy) / z });
+    let started = false;
+    const move = (ev: PointerEvent) => { if (!started) { started = true; pushHistory(); } update(id, { x: ox + (ev.clientX - sx) / z, y: oy + (ev.clientY - sy) / z }); };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
   const startResize = (e: React.PointerEvent, it: WBItem) => {
     e.stopPropagation(); e.preventDefault();
     const sx = e.clientX, ow = it.w, id = it.id, z = zoomRef.current;
-    const move = (ev: PointerEvent) => update(id, { w: Math.max(60, ow + (ev.clientX - sx) / z) });
+    let started = false;
+    const move = (ev: PointerEvent) => { if (!started) { started = true; pushHistory(); } update(id, { w: Math.max(60, ow + (ev.clientX - sx) / z) }); };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
@@ -239,13 +267,16 @@ export default function Whiteboard() {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
       const p = toCanvas(ev.clientX, ev.clientY);
       const target = items.find(it => it.id !== fromId && p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + (heights[it.id] ?? 40));
-      if (target) setConnections(prev => prev.some(c => c.from === fromId && c.to === target.id) ? prev : [...prev, { id: uid("c"), from: fromId, to: target.id }]);
+      if (target && !connRef.current.some(c => c.from === fromId && c.to === target.id)) {
+        pushHistory();
+        setConnections(prev => [...prev, { id: uid("c"), from: fromId, to: target.id }]);
+      }
       setConnectDraft(null);
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
 
-  // 背景でのポインタ操作：選択モード=パン、ペンモード=描画
+  // 背景でのポインタ操作：選択モード=パン、ペン=描画、消しゴム=消去
   const onCanvasPointerDown = (e: React.PointerEvent) => {
     if (toolRef.current === "pen") {
       const first = toCanvas(e.clientX, e.clientY);
@@ -254,9 +285,25 @@ export default function Whiteboard() {
       const move = (ev: PointerEvent) => { pts.push(toCanvas(ev.clientX, ev.clientY)); setLiveStroke({ points: [...pts], color, width }); };
       const up = () => {
         window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
-        if (pts.length > 1) setDrawings(prev => [...prev, { id: uid("d"), points: pts, color, width }]);
+        if (pts.length > 1) { pushHistory(); setDrawings(prev => [...prev, { id: uid("d"), points: pts, color, width }]); }
         setLiveStroke(null);
       };
+      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+      return;
+    }
+    if (toolRef.current === "eraser") {
+      let erased = false;
+      const eraseAt = (cx: number, cy: number) => {
+        const p = toCanvas(cx, cy); const R = 14 / zoomRef.current;
+        setDrawings(prev => {
+          const keep = prev.filter(s => !s.points.some(pt => Math.hypot(pt.x - p.x, pt.y - p.y) < R));
+          if (keep.length !== prev.length) { if (!erased) { erased = true; undoRef.current.push({ items: itemsRef.current, connections: connRef.current, drawings: prev }); redoRef.current = []; bumpHist(); } }
+          return keep;
+        });
+      };
+      eraseAt(e.clientX, e.clientY);
+      const move = (ev: PointerEvent) => eraseAt(ev.clientX, ev.clientY);
+      const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
       window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
       return;
     }
@@ -347,9 +394,21 @@ export default function Whiteboard() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2">
+        {/* Undo / Redo */}
+        <div className="flex items-center gap-0.5">
+          <button onClick={undo} disabled={!undoRef.current.length} title="戻る (Ctrl+Z)"
+            className="flex items-center rounded-md border border-slate-200 px-2 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H8"/></svg>
+          </button>
+          <button onClick={redo} disabled={!redoRef.current.length} title="やり直し (Ctrl+Shift+Z)"
+            className="flex items-center rounded-md border border-slate-200 px-2 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0-5 5v0a5 5 0 0 0 5 5h7"/></svg>
+          </button>
+        </div>
         <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
           <button onClick={() => setTool("select")} className={`rounded-md px-2 py-1 text-xs font-semibold ${tool === "select" ? "bg-white text-slate-700 shadow-sm" : "text-slate-400"}`}>選択/移動</button>
           <button onClick={() => setTool("pen")} className={`rounded-md px-2 py-1 text-xs font-semibold ${tool === "pen" ? "bg-white text-slate-700 shadow-sm" : "text-slate-400"}`}>ペン</button>
+          <button onClick={() => setTool("eraser")} className={`rounded-md px-2 py-1 text-xs font-semibold ${tool === "eraser" ? "bg-white text-slate-700 shadow-sm" : "text-slate-400"}`}>消しゴム</button>
         </div>
         <button onClick={addText} className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">＋テキスト</button>
         {tool === "pen" && (
@@ -374,7 +433,7 @@ export default function Whiteboard() {
 
       {/* Canvas */}
       <div ref={containerRef} className="relative flex-1 overflow-auto bg-slate-100"
-        style={{ cursor: tool === "pen" ? "crosshair" : "grab" }}
+        style={{ cursor: tool === "select" ? "grab" : "crosshair" }}
         onWheel={onWheel} onPointerDown={onCanvasPointerDown}>
         <div ref={canvasRef} className="relative"
           style={{ width: CANVAS_W, height: CANVAS_H, transform: `scale(${zoom})`, transformOrigin: "0 0",
@@ -384,7 +443,7 @@ export default function Whiteboard() {
             <defs><marker id="wb-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 Z" fill="#64748b" /></marker></defs>
             {drawings.map((s) => (
               <g key={s.id} className={tool === "select" ? "pointer-events-auto cursor-pointer" : ""}
-                onClick={(e) => { if (tool !== "select") return; e.stopPropagation(); setDrawings(prev => prev.filter(x => x.id !== s.id)); }}>
+                onClick={(e) => { if (tool !== "select") return; e.stopPropagation(); pushHistory(); setDrawings(prev => prev.filter(x => x.id !== s.id)); }}>
                 <path d={strokePath(s.points)} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinejoin="round" strokeLinecap="round" />
               </g>
             ))}
@@ -393,7 +452,7 @@ export default function Whiteboard() {
               const a = items.find(i => i.id === c.from), b = items.find(i => i.id === c.to); if (!a || !b) return null;
               const p1 = center(a), p2 = center(b);
               return (
-                <g key={c.id} className={tool === "select" ? "pointer-events-auto cursor-pointer" : ""} onClick={(e) => { if (tool !== "select") return; e.stopPropagation(); setConnections(prev => prev.filter(x => x.id !== c.id)); }}>
+                <g key={c.id} className={tool === "select" ? "pointer-events-auto cursor-pointer" : ""} onClick={(e) => { if (tool !== "select") return; e.stopPropagation(); pushHistory(); setConnections(prev => prev.filter(x => x.id !== c.id)); }}>
                   <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth={12} />
                   <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#64748b" strokeWidth={2} markerEnd="url(#wb-arrow)" />
                 </g>
@@ -406,7 +465,7 @@ export default function Whiteboard() {
             const selected = selectedId === it.id;
             return (
               <div key={it.id} ref={(el) => { elRefs.current[it.id] = el; }}
-                className={`absolute ${selected ? "ring-2 ring-blue-400" : ""} ${tool === "pen" ? "pointer-events-none" : ""}`}
+                className={`absolute ${selected ? "ring-2 ring-blue-400" : ""} ${tool !== "select" ? "pointer-events-none" : ""}`}
                 style={{ left: it.x, top: it.y, width: it.w, zIndex: it.z, ...(it.type === "text" ? shapeStyle(it.shape) : { borderRadius: 8 }) }}
                 onPointerDown={(e) => startDrag(e, it)} onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); }}>
                 {selected && tool === "select" && (
@@ -437,12 +496,12 @@ export default function Whiteboard() {
                 {selected && it.type === "text" && editingId !== it.id && (
                   <div className="absolute left-0 top-full mt-1 flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow" onPointerDown={(e) => e.stopPropagation()}>
                     {SHAPES.map((s) => (
-                      <button key={s.id} onClick={(e) => { e.stopPropagation(); update(it.id, { shape: s.id }); }}
+                      <button key={s.id} onClick={(e) => { e.stopPropagation(); pushHistory(); update(it.id, { shape: s.id }); }}
                         className={`flex h-5 w-5 items-center justify-center rounded text-xs ${it.shape === s.id ? "bg-blue-100 text-blue-600" : "text-slate-500 hover:bg-slate-100"}`}>{s.label}</button>
                     ))}
                     <span className="mx-0.5 w-px bg-slate-200" />
                     {TEXT_COLORS.map((c) => (
-                      <button key={c} onClick={(e) => { e.stopPropagation(); update(it.id, { color: c }); }} className="h-5 w-5 rounded-full border border-slate-300" style={{ background: c }} />
+                      <button key={c} onClick={(e) => { e.stopPropagation(); pushHistory(); update(it.id, { color: c }); }} className="h-5 w-5 rounded-full border border-slate-300" style={{ background: c }} />
                     ))}
                   </div>
                 )}
